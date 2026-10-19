@@ -1,0 +1,53 @@
+# Weiterarbeiten
+
+## Aufbau
+
+- `vendor/VectorPie/`: Kopie des SDK aus dem Tempest-Port (ohne `.git`). Doku in `sdk/docs/`, besonders `05-3d.md` (Kamera, Meshes, Nebel) und `03-game-layer.md` (Schleife, Eingaben).
+- `src/main.c`: `vp_run`, Umgebungsvariablen der Testhilfen, `_dvg`/`_sdl`-Namenserkennung wie bei Tempest.
+- Das Spiel selbst liegt in sechs Dateien, die sich `src/game_internal.h` teilen (seit 2026-10-10; vorher alles in `game.c`):
+  - `src/game_internal.h`: Konstanten, Aufzählungen, `obj`, die Tabellen-Typen (`era`, `heavy`, `difficulty`), der Spielzustand `struct game_state` (überall als `G`), die kleinen Inline-Helfer (`frand`, `clampf`, `wrap_angle`, `course_of`, `era()`, `hard()`, `player_forward` usw.) und die Prototypen, die eine Datei den anderen bietet.
+  - `src/game.c`: `G` und die Tabellen, `enter`/`notice`/`cheer`/`add_score`, der Spielablauf (`start_level`, `start_game`, `plane_lost`, `respawn`, `start_warp`, `step` mit der Zustandsmaschine), die zwei Spieler, der Automat (`coin_start`, `enter_attract`, `end_game`, `update_initials`), die Einstellungen, Selbsttest und Fingerabdruck, `game_init`/`game_update`.
+  - `src/objects.c`: Objekt-Pool (`new_obj` mit dem Partikel-Budget), Effekte (`burst`, `point_ring`, `pixel_burst`, `sphere_burst`, `shock_ring`, `shatter`, `throw_part`), Treffer (`shoot_down`, `enemy_down`, `enemy_hit`, `boss_hit`, `site_shot`), die Aktualisierung aller nicht gesteuerten Objekte (Schüsse, Kugeln, Bomben, Wracks, Teile, Trümmer, Items, eigene Raketen) und `update_objects`, `check_collisions`.
+  - `src/boss.c`: die fünf Bosse als Kämpfe in Stufen: Tabelle (`bosses`, Stufen und Teile), Treffer (`boss_take_shot`, `part_hit`, `stage_done`), Waffen (`volley`, `machine_gun`, `laser`), je Boss eine Funktion für Flug und Feuer (`zeppelin`, `b25`, `chinook`, `b52`, `mothership`), `update_boss`. Gezeichnet in `draw.c` (`draw_boss_parts`, `draw_bossintro`), Zustände `BOSSINTRO` und `BOSSTURN` in `game.c`, Geschosse und Eskorte in `enemies.c`.
+  - `src/enemies.c`: Spawnen (Gegner, Formation, Große, Boss), `shoot`/`launch_missile_from`, Steuerung und Kampfweisen (`steer_toward`, `fight_*`, `begin_evading`, `enemy_evades`, `attack_target`), `update_enemy`, Boss mit Geschützen (`turret_local`, `update_boss`), feindliche Raketen, Bodenziele (`run_sites`), `run_spawning`.
+  - `src/player.c`: `read_yoke`, Flugmodell (`update_player`), Waffen und Zielhilfe (`gun_target`, `fire_guns`, `fire_missile`), Items (`grant_item`, `random_item`), Schaden und Tod (`damage_player`, `kill_player`), Autopilot, Stereo-Hören (`hear_the_sky`), Zeittunnel (`tunnel_approach`, `update_tunnel`; die Tunnelzeit läuft ab `TUNNEL_APPROACH`, `WARP_TIME` ist die Summe).
+  - `src/draw.c`: alles Zeichnen im Spiel: Objekte, Wracks, Orte, Spielerflugzeug mit Nachbrenner, HUD-Anbindung (`draw_plane_hud`), Radar, `draw_hud`, Kamera (`set_camera`), Boss-Absturz, Zeitreise (`draw_warp`), `game_draw`.
+  - `src/attract.c`: Titel, Bestenliste, Gegnerübersicht, Initialen.
+  - Regel: Was nur eine Datei braucht, bleibt dort `static` (die Prototypen stehen am Dateianfang). Was eine andere Datei braucht, verliert `static` und bekommt seinen Prototyp in `game_internal.h`, im Abschnitt der Datei, die es definiert.
+- Besondere Zellen in `src/city.c`: Tor, Depot, Geschütz (`plan_special`, Anteile in `cell_building`). Das Spiel fragt sie über `city_sites` und `city_site_at` ab und merkt Verbrauchtes mit `city_mark`; `city_reset` beim Ärenwechsel. Spielseite: `run_sites`, `site_shot`, `draw_sites`.
+- `src/city.c`: Gebäude. Zellen von 160 m, `cell_building` errechnet aus Zelle und Ära, ob und was dort steht; `plan` enthält die Bauten je Ära aus bis zu sechs Teilen (Quader, Pyramide, Satteldach, Sechseckturm). `city_draw`, `city_hit` (Kugel gegen Teile), `city_top` (Höhe zum Überfliegen).
+- `src/logo.c`: der Schriftzug des Marquees als Umrisse auf einem Raster (Großbuchstabe 10 hoch, Strich 2 dick); neue Buchstaben als Punktlisten dort.
+- `src/hud.c`: Cockpit und HUD, bekommt alles über `hud_state` (gefüllt in `draw_plane_hud` in `game.c`).
+- `src/world.c`: SDK-Kamera mit Nebel, Helligkeitsstufe und Blende (`world_level`, `world_fade`, `world_rgb`), Posen, Bodengitter, Wolken, Zeittunnel (`world_draw_tunnel`), Uhr, Linien und Kreise in Board-Einheiten (`world_bline`, `world_bcircle`).
+- `src/controls.c`: der Yoke, direkt über SDL gelesen, sobald ein Joystick mit "yoke" im Namen da ist. Belegbare Tasten und die Achsen nur über `controls_held`, `controls_pressed`, `controls_axes` abfragen, nie über `vp_input` direkt.
+- `src/models.c`: 14 Drahtmodelle in bis zu vier Farben. Beim Bauen wählt `C(n)` die Farbe der folgenden Linien; Punkte werden zwischen Farben nicht geteilt. Gezeichnet wird nur über `model_draw(modell, lage, tint)`. `src/sound.c`: alle Klänge aus Formeln. `src/service.c`: Service-Menü mit vier Seiten.
+- Bauen, Testen, Deployment: `BUILD.md`. Stand und Aufgaben: `STATUS.md`. Gestaltungsregeln: `DESIGN.md`.
+
+## Konventionen
+
+- Welt: SDK-Linkshändig, x Ost, y hoch, z Nord, Meter und Sekunden; ein Schritt ist 1/60 s (`DT`). Kurs 0 fliegt nach +z, positiver Kurs dreht nach rechts, positiver Nickwinkel hebt die Nase. `world_forward(heading, pitch)` ist die einzige Stelle, die daraus eine Richtung macht.
+- Yoke: `p1_sticky` meldet nach vorn als negativ. `pitch_cmd = invert ? -y : y`, also vorn = Sturzflug bei `invert_pitch = no`. Der Autopilot liefert seine Werte in derselben Form.
+- Rollen: `vp_xf_rot_z` mit positivem Winkel hebt die rechte Tragfläche; darum ist die Querlage `-x * BANK_MAX`.
+- Kurze Einzellinien (Funken, Schüsse, Trümmer, Punkte) über `world_dash`, nicht `world_line`: Sie werden am Ende von `draw_objects` mit `world_dashes` in wegoptimierter Reihenfolge gezeichnet. Zusammenhängendes weiter über `world_line` und Meshes.
+- Die Grenze des Boards liegt bei rund 300.000 Einheiten Strahlweg je Bild; `world_load()` sagt, wie nah das Spiel daran ist (1 = 250.000). Neues, das nur Schau ist, soll sich daran halten wie `new_obj`.
+- Zeichnen nur über `world_*`; vor jeder Gruppe `world_level(G.bright[BRIGHT_...])`, Farben über `world_rgb`. `world_fade` blendet alles darüber und muss nach Gebrauch wieder auf 1.
+- Kreise in Board-Einheiten immer über `world_bcircle`: Das Board-Quadrat wird auf 4:3 gestreckt, die Funktion gleicht das aus.
+- Text in Board-Einheiten (0..4095, y nach oben) über `text()` in `game.c`, Schrift `VP_FONT_ASTEROIDS`.
+- Gegner werden mit `ENEMY_SCALE` (1,5) gezeichnet und getroffen.
+- Schaden nur über `damage_player`; Boden und Gebäude töten direkt in `update_player`.
+- Abschüsse: `shoot_down` wählt die Art. Bausteine dafür sind `burst` (Funken: Feuer, Rauch, Weißglut), `shock_ring` (Druckwelle in der Luft oder am Boden), `shatter` (Modell zerfällt in seine Linien, `K_DEBRIS`), `throw_part` (ein Stück löst sich, `K_PART`) und das Wrack `K_WRECK`. Die Linien eines Modells liefert `model_segments`; welche davon ein Wrack oder ein Stück noch hat, sagt `cut` (`CUT_*`).
+- Partikel: `point_ring` (ein Punktring, `K_PRING`), `pixel_burst` (drei davon), `sphere_burst` (sechs als Kugel), `burst(..., SPARK_RAINBOW, ...)`, `cheer(text)` für das wachsende Wort.
+- Der Boss wird beim letzten Treffer zum Wrack mit `boss = 1`, und das Spiel geht in den Zustand `BOSSFALL` (Kamera `G.fall_eye` schaut auf `G.fall_at`); liegt er am Boden, folgt `start_warp`. War das eigene Flugzeug gerade verloren, fällt er im Hintergrund, und `run_spawning` öffnet den Tunnel später.
+- Flugzeuglage: Der Nickwinkel läuft frei von -pi bis pi (Looping). Wohin es über Grund geht, sagt `course_of(heading, pitch)`; nie `G.p.heading` allein für Anzeige oder Radar nehmen.
+- Ein Gegner mit `heavy = 1` ist einer der Großen: hält Kurs, schießt aus Türmen, hat mehrere Trefferpunkte (`enemy_hit`), wird mit `TINT_HEAVY` rot und gelb gezeichnet und mit `size` skaliert.
+- Ein Gegner mit `form != 0` gehört zu einer Formation: fliegt geradeaus, schießt nicht, zählt nicht zur Sollzahl der Jäger.
+- Eine neue Einstellung braucht: Feld in `G`, Vorgabe in `load_settings`, Zeile in `read_settings` und `save_settings`, beide Übergaben, Feld in `service_settings`, Zeile in `service.c` (`row_names`, `row_number` oder `row_switch`, Seitenliste), Kommentar in `package/game.ini`.
+- Was nicht aus dem Original stammt oder geschätzt ist, steht in `STATUS.md`.
+
+## Nächste Schritte
+
+0. **Vor einer Freigabe:** `DEBUG_LEVEL_SELECT` in `src/service.h` auf 0 setzen (Level-Auswahl bei START, nur zum Testen).
+
+1. Deployment auf den Automaten (`BUILD.md`), Rückmeldung des Nutzers einarbeiten. `run.log` auf Bildkosten prüfen, sie sind mit Gebäuden und HUD deutlich gestiegen.
+2. Nach jeder Änderung an der Spiellogik den Selbsttest laufen lassen und Bilder ansehen: mit `tools/record.sh` und `tools/dvgview.py` (Aufzeichnung der Platinen-Daten unter WSL, `BUILD.md`); `tools/snap.ps1` liefert derzeit nur Schwarz (`TP3D_PAGE`, `TP3D_LEVEL`, `TP3D_KILLS` helfen dabei). Für einen Umbau, der nichts ändern soll: Fingerabdrücke des Selbsttests vorher und nachher vergleichen (`BUILD.md`).
+3. Offene Punkte aus `STATUS.md`.
