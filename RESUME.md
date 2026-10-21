@@ -20,7 +20,7 @@
 - `src/hud.c`: Cockpit und HUD, bekommt alles über `hud_state` (gefüllt in `draw_plane_hud` in `game.c`).
 - `src/world.c`: SDK-Kamera mit Nebel, Helligkeitsstufe und Blende (`world_level`, `world_fade`, `world_rgb`), Posen, Bodengitter, Wolken, Zeittunnel (`world_draw_tunnel`), Uhr, Linien und Kreise in Board-Einheiten (`world_bline`, `world_bcircle`).
 - `src/controls.c`: der Yoke, direkt über SDL gelesen, sobald ein Joystick mit "yoke" im Namen da ist. Belegbare Tasten und die Achsen nur über `controls_held`, `controls_pressed`, `controls_axes` abfragen, nie über `vp_input` direkt.
-- `src/models.c`: 14 Drahtmodelle in bis zu vier Farben. Beim Bauen wählt `C(n)` die Farbe der folgenden Linien; Punkte werden zwischen Farben nicht geteilt. Gezeichnet wird nur über `model_draw(modell, lage, tint)`. `src/sound.c`: alle Klänge aus Formeln. `src/service.c`: Service-Menü mit vier Seiten.
+- `src/models.c`: 14 Drahtmodelle in bis zu vier Farben. Beim Bauen wählt `C(n)` die Farbe der folgenden Linien; Punkte werden zwischen Farben nicht geteilt. Gezeichnet wird nur über `model_draw(modell, lage, tint)`. `src/sound.c`: alle Klänge aus Formeln. `src/service.c`: Service-Menü mit vier Seiten. `src/setup.c`: die Einrichtung beim ersten Start (Yoke oder Joystick, Tasten), arbeitet wie das Service-Menü auf `service_settings`; `game.c` öffnet sie (`open_setup`, `update_setup`), solange `setup_done` nicht in `save/settings.ini` steht. Die Vorgabe-Belegung einer Taste liefert für beide `service_standard`.
 - Bauen, Testen, Deployment: `BUILD.md`. Stand und Aufgaben: `STATUS.md`. Gestaltungsregeln: `DESIGN.md`.
 
 ## Konventionen
@@ -48,6 +48,6 @@
 
 0. **Vor einer Freigabe:** `DEBUG_LEVEL_SELECT` in `src/service.h` auf 0 setzen (Level-Auswahl bei START, nur zum Testen).
 
-1. Deployment auf den Automaten (`BUILD.md`), Rückmeldung des Nutzers einarbeiten. `run.log` auf Bildkosten prüfen, sie sind mit Gebäuden und HUD deutlich gestiegen.
+1. Deployment auf den Automaten (`BUILD.md`), Rückmeldung des Nutzers einarbeiten. Am Automaten läuft 0.61.0; 0.62.0 (Wolken aus Quellungen in 3D) noch nicht; dieser Stand liegt im Worktree-Zweig `claude/game-initialization-mode-3bc36d` und enthält die zuvor nicht eingecheckten Änderungen 0.51/0.52 aus `F:\Time Pilot 3D` (F2-Menütaste, Anleitung nach START, Lounge-Musik). `run.log` auf Bildkosten prüfen, sie sind mit Gebäuden und HUD deutlich gestiegen.
 2. Nach jeder Änderung an der Spiellogik den Selbsttest laufen lassen und Bilder ansehen: mit `tools/record.sh` und `tools/dvgview.py` (Aufzeichnung der Platinen-Daten unter WSL, `BUILD.md`); `tools/snap.ps1` liefert derzeit nur Schwarz (`TP3D_PAGE`, `TP3D_LEVEL`, `TP3D_KILLS` helfen dabei). Für einen Umbau, der nichts ändern soll: Fingerabdrücke des Selbsttests vorher und nachher vergleichen (`BUILD.md`).
 3. Offene Punkte aus `STATUS.md`.

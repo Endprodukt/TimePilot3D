@@ -40,11 +40,19 @@ void game_cheat_debugsel(int row);
 /* For testing: the service menu open on its MONITOR page from the start. */
 void game_cheat_service(void);
 
+/* For testing: the first start's setup open on page `page` (0 its first
+ * question; setup_cheat_page for the others), whether it was done or not. */
+void game_cheat_setup(int page);
+
+/* For testing: a game begun with its last plane just lost: the continue's countdown. */
+void game_cheat_continue(void);
+
 /* For testing: every new plane has the shield, the missiles and the triple shot. */
 void game_cheat_items(void);
 
 /* For testing: attract mode begins on this page (0 the title, 1 the high
- * scores, 2 who is who, 3 the demo). */
+ * scores, 2 who is who, 3 the demo, 4 how to play, 5 the items; 6 the items of the
+ * tutorial after START). */
 void game_attract_page(int page);
 
 /* For testing: the game plays itself, `steps` steps a frame, with lives

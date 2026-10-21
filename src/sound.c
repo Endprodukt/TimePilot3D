@@ -25,7 +25,7 @@
 
 static vp_audio *s_audio;
 static vp_sound *s_fx[FX_COUNT];
-#define FX_VARIANTS 4
+#define FX_VARIANTS 6
 static vp_sound *s_fx_var[FX_COUNT][FX_VARIANTS];   /* more recordings of an effect: one at random */
 static int       s_fx_vars[FX_COUNT];
 static vp_sound *s_enemy_shot_era[5];               /* the enemies' shot of each era, if recorded */
@@ -407,6 +407,12 @@ static float gen_missile_loop(float t)      /* a rocket motor: a hiss that flutt
     return 0.35f * lowpass(noise(), 0.45f) * (0.7f + 0.3f * sinf(PI2 * 23.0f * t));
 }
 
+static float gen_scream(float t)            /* a parachutist shot (stands in for scream.wav): a voice falling away, wavering */
+{
+    float f = 700.0f * expf(-0.9f * t), v = sinf(PI2 * f * t + 4.0f * sinf(PI2 * 6.0f * t));
+    return 0.35f * (v + 0.3f * sinf(2.0f * PI2 * f * t)) * env(t, 0.03f, 0.9f);
+}
+
 static float gen_ring(float t)              /* a ring passed: a bright chime, two bells a fifth apart */
 {
     float e = expf(-t / 0.22f) * (t < 0.003f ? t / 0.003f : 1.0f);
@@ -467,11 +473,11 @@ static const char *const fx_file[FX_COUNT] = {
     [FX_START] = "start", [FX_BOSS] = "boss", [FX_HIT_BOSS] = "hit_boss", [FX_ONEUP] = "oneup",
     [FX_ENEMY_SHOT] = "enemy_shot", [FX_HIT] = "hit", [FX_STALL] = "stall", [FX_BONUS] = "bonus",
     [FX_FORMATION] = "formation", [FX_WARN] = "warn", [FX_PORTAL] = "portal", [FX_WHOOSH] = "whoosh",
-    [FX_BURNER] = "burner", [FX_FALL] = "fall", [FX_RING] = "ring",
+    [FX_BURNER] = "burner", [FX_FALL] = "fall", [FX_RING] = "ring", [FX_SCREAM] = "scream",
 };
 
 /* What happens somewhere, and is heard from its side. */
-static int placed(int fx) { return fx == FX_EXPLODE || fx == FX_BIG_EXPLODE || fx == FX_ENEMY_SHOT || fx == FX_HIT_BOSS || fx == FX_FALL; }
+static int placed(int fx) { return fx == FX_EXPLODE || fx == FX_BIG_EXPLODE || fx == FX_ENEMY_SHOT || fx == FX_HIT_BOSS || fx == FX_FALL || fx == FX_SCREAM; }
 
 /* --- making them --------------------------------------------------------- */
 
@@ -678,6 +684,7 @@ void sound_init(vp_audio *a)
     s_dump_name = fx_file[FX_BURNER]; s_fx[FX_BURNER] = synth(0.8f, gen_whoosh);
     s_dump_name = fx_file[FX_FALL]; s_fx[FX_FALL] = synth(2.5f, gen_fall);
     s_dump_name = fx_file[FX_RING]; s_fx[FX_RING] = synth(0.9f, gen_ring);
+    s_dump_name = fx_file[FX_SCREAM]; s_fx[FX_SCREAM] = synth(1.2f, gen_scream);
     {
         /* A recording in the game's sounds/ folder by an effect's name
          * stands in for the one made here. */
@@ -692,7 +699,7 @@ void sound_init(vp_audio *a)
                 fprintf(stderr, "Time Pilot 3D: sound %s from %s\n", fx_file[k], rel);
                 if (placed(k)) { s_fx_ear[k][0][0] = recording_ear(fx_file[k], 0); s_fx_ear[k][0][1] = recording_ear(fx_file[k], 1); }
             }
-            /* and its other takes, <name>_2 to _4 */
+            /* and its other takes, <name>_2 to _6 */
             {
                 int v;
                 s_fx_var[k][0] = s_fx[k];
@@ -790,6 +797,7 @@ static float fx_level(int fx)
     case FX_BIG_EXPLODE: return 1.25f;
     case FX_HIT_BOSS:   return 1.1f;      /* a hit on something that takes several: clearly heard */
     case FX_RING:       return 1.1f;      /* over the tunnel's music */
+    case FX_SCREAM:     return 0.45f;     /* heard, not loud: the recordings are hot (mean 0.24 to 0.34, peaks at full) - under an explosion (2026-10-21) */
     case FX_DEATH:      return 1.0f;
     case FX_WARP:       return s_music_volume > 0.05f ? 0.45f : 0.9f;    /* under the tunnel's music, the air */
     case FX_TINK:       return 0.5f;
@@ -1183,11 +1191,11 @@ void sound_tick(float dt)
 
 static const char *const music_file[MUSIC_COUNT] = {
     [MUSIC_ATTRACT] = "attract", [MUSIC_HISCORE] = "hiscore", [MUSIC_LEVELIN] = "levelin",
-    [MUSIC_APPROACH] = "approach", [MUSIC_TUNNEL] = "tunnel", [MUSIC_BOSS] = "boss", [MUSIC_START] = "start",
+    [MUSIC_APPROACH] = "approach", [MUSIC_TUNNEL] = "tunnel", [MUSIC_BOSS] = "boss", [MUSIC_LOUNGE] = "lounge", [MUSIC_START] = "start",
     [MUSIC_VICTORY] = "victory",
 };
 
-static int music_loops(int piece) { return piece == MUSIC_ATTRACT || piece == MUSIC_HISCORE || piece == MUSIC_TUNNEL; }
+static int music_loops(int piece) { return piece == MUSIC_ATTRACT || piece == MUSIC_HISCORE || piece == MUSIC_TUNNEL || piece == MUSIC_LOUNGE; }
 
 static vp_voice music_play(int piece, float fade_in)
 {

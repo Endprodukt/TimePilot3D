@@ -20,9 +20,8 @@ typedef struct hud_state {
     float    altitude;          /* m */
     float    throttle;          /* 0..1 */
     float    energy;            /* 0..1 */
-    int      cockpit;           /* 1: the cockpit and the whole display; 0: the chase view's few */
+    int      cockpit;           /* 1: the whole display, from the cockpit; 0: the chase view's few (the cockpit itself: draw.c) */
     float    energy_y;          /* where the energy bar is, board units */
-    int      frame;             /* with the cockpit: its blue lines too (coaming, glass, canopy); 0: the display alone */
     int      rear;              /* looking back: a mirror's frame, and only what still matters */
     int      stalled, pull_up;
     int      burner;            /* the afterburner is lit */

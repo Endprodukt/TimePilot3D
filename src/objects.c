@@ -524,15 +524,16 @@ static void update_shot(obj *o)
             return;
         }
         if (t->kind == K_CHUTE && !t->cut && t->age > CHUTE_SAFE) {
-            /* Shot by mistake: the canopy folds, he falls, and there is
-             * nothing to pick up. The run of parachutists is over too. */
+            /* Shot by mistake: the canopy folds, he falls screaming. The run
+             * of parachutists is over; caught on the way down, he is worth
+             * CHUTE_CATCH_POINTS all the same (update_chute). */
             if (segment_distance(from, o->pos, vp_v3_add(t->pos, vp_v3(0, CHUTE_SIZE * 4.0f, 0))) > CHUTE_SIZE * 5.5f) continue;
             t->cut = 1;
             t->life = 20.0f;
             burst(vp_v3_add(t->pos, vp_v3(0, CHUTE_SIZE * 7.0f, 0)), t->vel, 6, 18.0f, 0.5f, SPARK_WHITE, 0);
             G.chute_chain = 0;
             notice("PARACHUTE SHOT");
-            sound_fx(FX_STALL);
+            sound_at(FX_SCREAM, t->pos);
             o->kind = K_NONE;
             return;
         }
@@ -586,6 +587,16 @@ static void update_chute(obj *o)
         return;
     }
     if ((o->life -= DT) <= 0 || (!o->cut && o->pos.y < GROUND_Y + 8.0f) || dist3(o->pos, G.p.pos) > DESPAWN) { o->kind = K_NONE; return; }
+    if (o->cut && player_targetable() && dist3(o->pos, G.p.pos) < 20.0f) {
+        /* one that was shot, caught as he falls: the extra bonus */
+        int points = CHUTE_CATCH_POINTS * (1 + G.loop);
+        add_score(points);
+        floating_score(o->pos, points);
+        cheer("SAVED");
+        sound_fx(FX_BONUS);
+        o->kind = K_NONE;
+        return;
+    }
     if (!o->cut && player_targetable() && dist3(vp_v3_add(o->pos, vp_v3(0, CHUTE_SIZE * 4.0f, 0)), G.p.pos) < 20.0f) {
         /* 1000 for the first, 1000 more for each one after it, up to
          * 5000: until a plane is lost or the era left */

@@ -21,7 +21,6 @@
 
 #define CLOUD_COUNT   10
 #define CLOUD_TILE    1800.0f       /* the clouds repeat every this far */
-#define CLOUD_POINTS  8
 
 static vp_dvg    *s_dvg;
 static vp3d_view  s_view;
@@ -40,10 +39,14 @@ static struct dash {
 } s_dash[MAX_DASHES];
 static int s_dash_count;
 
-/* The clouds: where each floats in its tile, how big, and its outline. */
+/* The clouds: where each floats in its tile (x, z; y its flat base), and
+ * the puffs it is made of, each a ball round (px, py, pz) from the middle
+ * of its base, of radius pr. */
+#define CLOUD_PUFFS 6
 static struct cloud {
-    float x, y, z, rx, rz;
-    float bump[CLOUD_POINTS];
+    float x, y, z;
+    float rz, bump[8];              /* 2001's rocks, where the clouds would be: their size and corners */
+    float px[CLOUD_PUFFS], py[CLOUD_PUFFS], pz[CLOUD_PUFFS], pr[CLOUD_PUFFS];
 } s_clouds[CLOUD_COUNT];
 
 /* --- solid things -----------------------------------------------------------------
@@ -73,6 +76,7 @@ static uint8_t s_pen[3];            /* the beam's colour as it was set last */
 static struct sline {
     vp_vec3 a, b;
     uint8_t r, g, b_;
+    uint8_t front_only;             /* a line never cut (world_set_nocut): only the cockpit's faces cut it */
     float   fog_end;
 } s_line[SOLID_LINES];
 static int s_lines;
@@ -85,9 +89,11 @@ static struct sface {
 static int s_faces;
 static struct sgroup {
     int   first, count;
+    int   front;                    /* the cockpit's (world_set_front) */
     float x0, y0, x1, y1, wmax;
 } s_group[SOLID_GROUPS];
 static int s_groups, s_nocut, s_dash_wait;
+static int s_front, s_any_front;    /* faces given now are the cockpit's; there are some this frame */
 
 /* Lines flat on the board that stand for what is behind everything (the
  * tunnel, its clock): with solid things they wait too, and are cut by
@@ -107,8 +113,9 @@ static void pen(uint8_t r, uint8_t g, uint8_t b)
 static void put(vp_vec3 a, vp_vec3 b)
 {
     struct sline *l;
-    if (!s_solid || s_nocut || s_lines == SOLID_LINES) { vp3d_line(s_dvg, &s_view, a, b); return; }
+    if (!s_solid || s_lines == SOLID_LINES || (s_nocut && (s_front || !s_any_front))) { vp3d_line(s_dvg, &s_view, a, b); return; }
     l = &s_line[s_lines++];
+    l->front_only = (uint8_t)s_nocut;
     l->a = a; l->b = b;
     l->r = s_pen[0]; l->g = s_pen[1]; l->b_ = s_pen[2];
     l->fog_end = s_view.fog_end;
@@ -136,14 +143,17 @@ static void fline(float x, float y)
     vp_lineto(s_dvg, (int)lroundf(x), (int)lroundf(y));
 }
 void world_set_nocut(int on) { s_nocut = on; }
+void world_set_front(int on) { s_front = on; }
 
 void world_group(void)
 {
     struct sgroup *g;
     if (!s_solid || s_groups == SOLID_GROUPS) return;
-    if (s_groups > 0 && s_group[s_groups - 1].count == 0) return;     /* the last is still empty: that one */
+    if (s_front) s_any_front = 1;
+    if (s_groups > 0 && s_group[s_groups - 1].count == 0) { s_group[s_groups - 1].front = s_front; return; }     /* the last is still empty: that one */
     g = &s_group[s_groups++];
     g->first = s_faces; g->count = 0;
+    g->front = s_front;
     g->x0 = g->y0 = 1e30f; g->x1 = g->y1 = -1e30f; g->wmax = 0;
 }
 int world_solid(void) { return s_solid; }
@@ -289,6 +299,7 @@ void world_flush(void)
             int g, f;
             for (g = 0; g < s_groups && nc < MAX_CUTS; g++) {
                 const struct sgroup *gr = &s_group[g];
+                if (l->front_only && !gr->front) continue;
                 if (lx1 < gr->x0 || lx0 > gr->x1 || ly1 < gr->y0 || ly0 > gr->y1) continue;
                 if (w0 > gr->wmax * 1.02f && w1 > gr->wmax * 1.02f) continue;
                 for (f = gr->first; f < gr->first + gr->count && nc < MAX_CUTS; f++)
@@ -357,6 +368,14 @@ static int hidden(float x, float y, float w)
     return 0;
 }
 
+int world_hidden(vp_vec3 p)
+{
+    vp_vec3 c = vp_xf_point(&s_view.world_to_camera, p);
+    float x, y;
+    if (!s_solid || !s_faces || c.z < SOLID_NEAR || !vp3d_project(&s_view, p, &x, &y)) return 0;
+    return hidden(x, y, 1.0f / c.z);
+}
+
 static unsigned s_rng = 0xC10DD5u;
 static float frand(void)
 {
@@ -381,9 +400,21 @@ void world_init(int vertical)
         c->x = frand() * CLOUD_TILE;
         c->z = frand() * CLOUD_TILE;
         c->y = 120.0f + frand() * 420.0f;
-        c->rx = 40.0f + frand() * 70.0f;
+        (void)frand();                                  /* (the old clouds' width: the rocks stay as they were) */
         c->rz = 25.0f + frand() * 40.0f;
-        for (j = 0; j < CLOUD_POINTS; j++) c->bump[j] = 0.75f + frand() * 0.5f;
+        for (j = 0; j < 8; j++) c->bump[j] = 0.75f + frand() * 0.5f;
+        {
+            /* a heap: wide, less deep, the puffs in the middle bigger and
+             * higher, each its own size; their bottoms come down to the base */
+            float w = 50.0f + frand() * 70.0f;
+            for (j = 0; j < CLOUD_PUFFS; j++) {
+                float t = (float)j / (float)(CLOUD_PUFFS - 1) * 2.0f - 1.0f + (frand() - 0.5f) * 0.25f;
+                c->pr[j] = w * (0.28f + 0.22f * (1.0f - t * t)) * (0.85f + frand() * 0.3f);
+                c->px[j] = t * w * 0.7f;
+                c->pz[j] = (frand() - 0.5f) * w * 0.7f;
+                c->py[j] = c->pr[j] * (0.35f + 0.35f * (1.0f - t * t) + frand() * 0.15f);
+            }
+        }
     }
 }
 
@@ -397,6 +428,7 @@ void world_begin(vp_dvg *d)
     s_lines = s_faces = s_groups = s_fsegs = 0;
     s_far = 0;
     s_nocut = 0;
+    s_front = s_any_front = 0;
     s_dash_wait = 0;
     /* what the frame before cost the beam, smoothed over a few frames */
     vp_dvg_get_stats(d, &st);
@@ -614,6 +646,22 @@ int world_project(vp_vec3 p, float *sx, float *sy)
     return vp3d_project(&s_view, p, sx, sy);
 }
 
+void world_board_points(const float *board, int n, float depth, vp_vec3 *out)
+{
+    /* The lens maps the camera's x and y at one depth straight onto the
+     * board: where its middle and one metre right and up land says how. */
+    vp_xf to_world = vp_xf_inverse(s_view.world_to_camera);
+    float x0 = 0, y0 = 0, x1 = 1, y1 = 0, x2 = 0, y2 = 1;
+    int i;
+    vp3d_project(&s_view, vp_xf_point(&to_world, vp_v3(0, 0, depth)), &x0, &y0);
+    vp3d_project(&s_view, vp_xf_point(&to_world, vp_v3(1, 0, depth)), &x1, &y1);
+    vp3d_project(&s_view, vp_xf_point(&to_world, vp_v3(0, 1, depth)), &x2, &y2);
+    for (i = 0; i < n; i++) {
+        float cx = (board[2 * i] - x0) / (x1 - x0), cy = (board[2 * i + 1] - y0) / (y2 - y0);
+        out[i] = vp_xf_point(&to_world, vp_v3(cx, cy, depth));
+    }
+}
+
 void world_dash(vp_vec3 a, vp_vec3 b)
 {
     struct dash *d;
@@ -782,37 +830,55 @@ static int far_fade(float d, const uint8_t base[3])
 
 /* Each cloud is a flat, bumpy ring with a puffy arc standing over it, so
  * it reads as a cloud edge-on too; drawn where its nearest repeat is. */
+/* A cloud is a heap of puffs: each a ball, seen as its round outline
+ * turned to the eye, cut flat at the cloud's base. With SOLID OBJECTS each
+ * outline is a face as well, and the nearer puffs hide what is behind
+ * them - the heap's outline and the round folds inside it are what is
+ * left, and they move against each other as the plane goes by. */
+#define PUFF_SIDES 12
+
 void world_draw_clouds(vp_vec3 eye)
 {
     const uint8_t base[3] = { s_colour[0], s_colour[1], s_colour[2] };
-    int i, j;
+    int i, j, k;
     for (i = 0; i < CLOUD_COUNT; i++) {
         const struct cloud *c = &s_clouds[i];
-        float dx = c->x - eye.x, dz = c->z - eye.z;
-        float cx, cz, h = 0.45f * c->rz;
-        vp_vec3 prev = vp_v3(0, 0, 0);
+        float dx = c->x - eye.x, dz = c->z - eye.z, len;
 
         dx -= CLOUD_TILE * floorf(dx / CLOUD_TILE + 0.5f);     /* the repeat nearest the eye */
         dz -= CLOUD_TILE * floorf(dz / CLOUD_TILE + 0.5f);
-        if (dx * dx + dz * dz > (FOG_END - 100.0f) * (FOG_END - 100.0f)) continue;
-        if (!far_fade(sqrtf(dx * dx + dz * dz), base)) continue;
-        cx = eye.x + dx;
-        cz = eye.z + dz;
-        /* the base: a ring whose radius bulges in and out */
-        for (j = 0; j <= CLOUD_POINTS; j++) {
-            int k = j % CLOUD_POINTS;
-            float a = 6.2831853f * (float)k / (float)CLOUD_POINTS;
-            vp_vec3 p = vp_v3(cx + c->rx * c->bump[k] * cosf(a), c->y, cz + c->rz * c->bump[k] * sinf(a));
-            if (j > 0) world_line(prev, p);
-            prev = p;
-        }
-        /* the top: an arc of bumps from one side to the other, along x */
-        for (j = 0; j <= 6; j++) {
-            float u = (float)j / 6.0f, a = 3.14159265f * u;
-            float bump = 1.0f + 0.35f * fabsf(sinf(a * 2.5f));
-            vp_vec3 p = vp_v3(cx - c->rx * cosf(a), c->y + h * sinf(a) * bump, cz);
-            if (j > 0) world_line(prev, p);
-            prev = p;
+        len = sqrtf(dx * dx + dz * dz);
+        if (len > FOG_END - 100.0f || len < 1.0f) continue;
+        if (!far_fade(len, base)) continue;
+        world_group();                      /* one cloud's faces together */
+        for (j = 0; j < CLOUD_PUFFS; j++) {
+            vp_vec3 m = vp_v3(eye.x + dx + c->px[j], c->y + c->py[j], eye.z + dz + c->pz[j]), p[PUFF_SIDES];
+            vp_vec3 to = vp_v3_normalize(vp_v3_sub(m, eye)), right, up;
+            float r = c->pr[j], l = sqrtf(to.x * to.x + to.z * to.z);
+            /* square to the line of sight, whichever way it goes - also
+             * from below or above: a ball looks round from everywhere */
+            right = l > 0.01f ? vp_v3(to.z / l, 0, -to.x / l) : vp_v3(1, 0, 0);
+            up = vp_v3(right.y * to.z - right.z * to.y, right.z * to.x - right.x * to.z, right.x * to.y - right.y * to.x);
+            if (up.y < 0) up = vp_v3(-up.x, -up.y, -up.z);
+            for (k = 0; k < PUFF_SIDES; k++) {
+                float a = 6.2831853f * (float)k / (float)PUFF_SIDES;
+                vp_vec3 q = vp_v3(m.x + (right.x * cosf(a) + up.x * sinf(a)) * r, m.y + (right.y * cosf(a) + up.y * sinf(a)) * r,
+                                  m.z + (right.z * cosf(a) + up.z * sinf(a)) * r);
+                if (q.y < c->y) q.y = c->y;                     /* flat underneath */
+                p[k] = q;
+            }
+            if (s_solid) {
+                /* the face: every other corner, a little outside, so that
+                 * it covers the whole outline */
+                vp_vec3 f[PUFF_SIDES / 2];
+                for (k = 0; k < PUFF_SIDES / 2; k++) {
+                    vp_vec3 q = p[2 * k];
+                    f[k] = vp_v3(m.x + (q.x - m.x) * 1.16f, m.y + (q.y - m.y) * 1.16f, m.z + (q.z - m.z) * 1.16f);
+                    if (f[k].y < c->y) f[k].y = c->y;
+                }
+                world_face(f, PUFF_SIDES / 2);
+            }
+            for (k = 0; k < PUFF_SIDES; k++) world_line(p[k], p[(k + 1) % PUFF_SIDES]);
         }
     }
 }

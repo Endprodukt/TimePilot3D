@@ -72,7 +72,7 @@ Worauf es ankommt: `lit length` plus `blank length` je Bild. Ab rund 300.000 blo
 - `free_play`, `attract_sound`: `yes` oder `no`.
 - `yoke_sensitivity`: wie scharf der Yoke dreht, 1.0 ist das Tempo des Spiels. `yoke_deadzone`: Totzone um die Mitte in Prozent.
 - `invert_pitch`: `no` heißt Yoke nach vorn = Sturzflug (Flugzeug), `yes` dreht es um.
-- `view`: `cockpit` oder `chase`, die Ansicht beim Spielstart; START schaltet im Spiel um.
+- `view`: `cockpit`, `hud` (nur das HUD) oder `chase`, die Ansicht beim Spielstart; START geht im Spiel reihum (HUD, Cockpit, Verfolger); Vorgabe `hud`.
 - `aim_assist`: 0 bis 100, wie stark die Schüsse auf den Gegner am Fadenkreuz gezogen werden.
 - `fire_button`, `faster_button`, `slower_button`, `rear_button`: advmame.rc-Namen, oder `yoke_button1` bis `yoke_button32` für eine Taste des Yoke selbst.
 - Testhilfe `TP3D_BOSS2=n`: der Boss beginnt in Phase n, von 0 gezählt (1 die zweite; hat er weniger, die letzte). Beim Mutterschiff: 1 Ufo, 2 Roboter mit Armen, 3 Roboter ohne Arme.
@@ -87,15 +87,15 @@ Worauf es ankommt: `lit length` plus `blank length` je Bild. Ab rund 300.000 blo
 - `volume`, `effects_volume`, `engine_volume`: je 0 bis 100.
 - `brightness_*`: Helligkeit je Art, 0 bis 100 (unter 15 zeichnet der Strahl nichts).
 - `picture_size`: 60 bis 100, wie viel Prozent des Platinenbereichs das Bild füllt. `beam_limit`: 100 bis 250, Strahlweg je Bild in Tausend Einheiten, ab dem das Spiel ausdünnt. Beide auf der Seite MONITOR des Service-Menüs.
-- `cockpit_frame`: `yes` oder `no`. Bei `no` fehlen in der Cockpit-Ansicht die blauen Linien des Cockpits; das HUD bleibt.
+- `cockpit_frame` gibt es seit 0.55.0 nicht mehr; ein altes `no` wird als `view = hud` gelesen.
 
 ## Nach einem System-Update des Automaten
 
-Ein System-Update (neues Abbild auf die andere Partition, 2026-10-11 erlebt) lässt `/persistent/games/` und die Zeile in `gamelist.ini` stehen, löscht aber die Startverweise `/usr/local/share/advance/timepilot3d_dvg` und `_sdl`, den Ordner `timepilot3d_dir` mit dem Highscore-Verweis (ohne ihn zeigt das Marquee keine Highscores), das Marquee-Bild in `artwork/marquees/` und den SSH-Schlüssel in `/home/pi/.ssh/authorized_keys`. `tools/deploy.sh` legt die Startverweise und den Highscore-Verweis bei jedem Aufspielen neu an, wenn sie fehlen. Danach: Schlüssel wieder eintragen (Kennwort nötig, macht der Nutzer), dann (oder einfach `sh tools/deploy.sh`) die beiden Verweise neu anlegen (`ln -s /persistent/games/timepilot3d/timepilot3d ...`) und das Marquee kopieren. Über das Netzlaufwerk lassen sich Dateien überschreiben, aber keine Verweise anlegen und keine Rechte setzen.
+Ein System-Update (neues Abbild auf die andere der zwei System-Partitionen, erlebt 2026-10-11 und 2026-10-20) ersetzt alles außerhalb von `/persistent`; zurückgespielt wird nur eine feste Liste (`vectorpie-restore-snapshot`: Netz, SSH-Hostschlüssel, `gamelist.ini`, Menü-Einstellungen, Highscores einiger mitgelieferter Spiele). Darum steht Time Pilot 3D seit 2026-10-21 **nicht** mehr in `gamelist.ini`: Das Menü findet es wie Vectortron und die anderen SDK-Spiele selbst über `/persistent/games/timepilot3d/game.ini` (im `vector_pie_menu.log` als `packages: timepilot3d ...`), nimmt Marquee und Highscores aus dem Ordner (`marquee.png`, `save/highscores.txt`) und setzt beim Start `VP_OUTPUT`. Alles liegt auf `/persistent` und übersteht Updates; Startverweise, `timepilot3d_dir` und eine Marquee-Kopie in `artwork/` braucht es nicht mehr (entfernt; die alte `gamelist.ini` liegt als `gamelist.ini.bak-2026-10-21` im Spielordner). Nach einem Update fehlt nur der SSH-Schlüssel in `/home/pi/.ssh/authorized_keys` (Kennwort nötig, macht der Nutzer). Über das Netzlaufwerk lassen sich Dateien überschreiben, aber keine Verweise anlegen und keine Rechte setzen.
 
 ## Menü-Eintrag auf dem Automaten
 
-Am einfachsten über das Paket (unten): Das Menü legt dann alles selbst an. Von Hand, wie Tempest 2000 und Vector Pinball auf dem Automaten liegen: der Ordner `/persistent/games/timepilot3d` mit Programm, `game.ini`, `marquee.png`, `save` und `run.sh`; in `/usr/local/share/advance` die Verweise `timepilot3d_dvg` und `timepilot3d_sdl` auf `timepilot3d_dir/timepilot3d` (das Programm liest an seinem Namen ab, wohin es zeichnet); in `timepilot3d_dir` der Verweis `highscores.txt` auf `save/highscores.txt`; in `gamelist.ini` die Zeile `Other|Time Pilot 3D|timepilot3d|timepilot3d|timepilot3d`.
+Am einfachsten über das Paket (unten): Das Menü legt dann alles selbst an. Von Hand: der Ordner `/persistent/games/timepilot3d` mit Programm, `game.ini`, `marquee.png`, `run.sh`, `sounds`, `music` und `save` (das macht `tools/deploy.sh`); das Menü findet ihn beim nächsten Start. Keine Zeile in `gamelist.ini`, keine Verweise in `/usr/local/share/advance` (so war es bis 2026-10-21; das überlebte keine System-Updates).
 
 ## Spielstände
 
@@ -110,7 +110,7 @@ Am einfachsten über das Paket (unten): Das Menü legt dann alles selbst an. Von
 - `TP3D_KILLS=57` zusammen mit `TP3D_SELFTEST=1,3` zeigt den Zeittunnel nach wenigen Sekunden, vom Autopiloten geflogen. Mit `TP3D_HANDSOFF=1` dazu steuert niemand: So sieht man, was die Wand tut.
 - `SDL_AUDIODRIVER=dummy` für stille Läufe.
 
-- `TP3D_STUNT=1`: im Selbsttest zieht das Flugzeug alle zwölf Sekunden einen halben Looping und rollt sich dann aufrecht (prüft die Rolle). `TP3D_BOSS2=1`: jeder Boss kommt gleich in der letzten Stufe seines Kampfs (mit `TP3D_KILLS=56` sofort zu sehen). `TP3D_SERVICE=1`: das Service-Menü ist von Anfang an auf der Seite MONITOR offen. `TP3D_CHUTES=1`: jede Ära beginnt mit zwei Fallschirmspringern vor dem Flugzeug, einer davon getroffen. Mit `TP3D_SELFTEST=1,5` läuft ein echtes Spiel mit Autopilot in Echtzeit und mit Bild, gut für Aufzeichnungen.
+- `TP3D_STUNT=1`: im Selbsttest zieht das Flugzeug alle zwölf Sekunden einen halben Looping und rollt sich dann aufrecht (prüft die Rolle). `TP3D_BOSS2=1`: jeder Boss kommt gleich in der letzten Stufe seines Kampfs (mit `TP3D_KILLS=56` sofort zu sehen). `TP3D_SERVICE=1`: das Service-Menü ist von Anfang an auf der Seite MONITOR offen. `TP3D_PAGE=5`: die Attract-Seite ITEMS; `6`: die Items der Anleitung nach START. `TP3D_CONTINUE=1`: ein Spiel, dessen letztes Flugzeug gerade verloren ist (Countdown des Continue). `TP3D_SETUP=n`: die Einrichtung des ersten Starts ist offen, auch wenn sie schon durchlaufen wurde, auf Seite n (0 die Frage Yoke/Joystick, 1 die Yoke-Tasten, gezeichnet als wäre ein Yoke da, 2 die empfohlene Belegung, 3 Joystick-Empfindlichkeit, 4 Joystick-Tasten, 5 deren Belegung). Ohne `save/settings.ini` mit `setup_done = yes` beginnt jeder Start mit der Einrichtung; Selbsttest, `TP3D_PAGE`, `TP3D_SERVICE` und `TP3D_DEBUGSEL` übergehen sie. `TP3D_CHUTES=1`: jede Ära beginnt mit zwei Fallschirmspringern vor dem Flugzeug, einer davon getroffen. Mit `TP3D_SELFTEST=1,5` läuft ein echtes Spiel mit Autopilot in Echtzeit und mit Bild, gut für Aufzeichnungen.
 
 ## Bildschirmfoto des Spielfensters
 
@@ -146,3 +146,5 @@ sh tools/make_vpk.sh
 ```
 
 Das schreibt `build/timepilot3d-<version>.vpk`. Auf einen USB-Stick in den Ordner `games` kopieren und am Automaten über Settings, GAMES, INSTALL FROM USB installieren.
+
+Veröffentlicht wird das Paket im geteilten Google-Drive-Ordner `games` (https://drive.google.com/drive/folders/1N5vPb5K46OlYJ-xtTOY6IWD4E5GqMYiS), wie die anderen VectorPie-Spiele. Auf diesem PC ist Drive nicht eingebunden. Über Claude in Chrome ging es bei kleineren Paketen (Tempest Enhanced: New, File upload, Dateifeld per JavaScript im Fenster halten, dann `file_upload`); die Erweiterung lädt aber höchstens 10 MB je Aufruf hoch, und das Paket hat mit Musik rund 12 MB. Darum zieht der Nutzer die Datei selbst in den Ordner (2026-10-21: 0.62.0). Dort liegt noch `timepilot3d-0.51.0.vpk`.

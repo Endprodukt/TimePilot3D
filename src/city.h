@@ -53,6 +53,10 @@ int city_sites(int era, vp_vec3 eye, float reach, city_site *out, int max);
 /* The special place whose building is within `radius` of p; 0 if none. */
 int city_site_at(int era, vp_vec3 p, float radius, city_site *out);
 
+/* One special place (CITY_ kind) by itself, its foot at the origin of
+ * `at`, in its own colour: for the pages that explain it. */
+void city_draw_site(int kind, const vp_xf *at);
+
 void city_mark(int cx, int cz, int how);
 void city_reset(void);
 

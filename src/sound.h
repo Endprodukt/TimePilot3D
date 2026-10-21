@@ -29,6 +29,7 @@ enum {
     FX_BURNER,          /* the afterburner lights */
     FX_FALL,            /* a plane shot down goes into its dive: the howl before it hits */
     FX_RING,            /* a ring of the time tunnel passed: a chime (higher and louder through its middle) */
+    FX_SCREAM,          /* a parachutist shot: a scream as he falls (scream.wav and its takes, one at random) */
     FX_COUNT
 };
 
@@ -128,6 +129,7 @@ enum {
     MUSIC_APPROACH,     /* the way out of an era, into the tunnel's mouth */
     MUSIC_TUNNEL,       /* the time tunnel, a loop */
     MUSIC_BOSS,         /* a boss comes (BOSSINTRO): threat and an alarm */
+    MUSIC_LOUNGE,       /* how to play, before the first era (TUTORIAL): relaxed, a loop */
     MUSIC_START,        /* START pressed: over whatever plays (sound_music_sting) */
     MUSIC_VICTORY,      /* a boss shot down: a fanfare (sound_music_sting) */
     MUSIC_COUNT

@@ -84,6 +84,7 @@
 /* the guns */
 #define SHOT_SPEED      450.0f
 #define SHOT_LIFE       1.5f
+#define GUNS_MEET       320.0f      /* m ahead: where the two guns' shots cross, on the sight's line (the pipper is there too) */
 #define FIRE_PERIOD     0.11f
 #define MAX_SHOTS       30
 /* the items */
@@ -107,10 +108,12 @@ enum { SHOT_GUN, SHOT_FLAK, SHOT_BOSS, SHOT_HEAVY,
 #define DEPOT_HITS      5           /* shots a depot takes */
 #define GUN_HITS        3           /* and a gun on the ground */
 #define GUN_POINTS      300
+#define CHUTE_CATCH_POINTS 3000     /* a parachutist shot, caught as he falls */
 #define ASSIST_CONE     0.10f       /* radians at aim_assist 100: 6 degrees */
 /* the sky */
 #define SPAWN_NEAR      380.0f
 #define SPAWN_FAR       650.0f
+#define SPAWN_AHEAD     0.75f       /* the share of enemies that come from ahead (spawn_enemy) */
 #define DESPAWN         1500.0f
 #define SPAWN_EVERY     0.5f
 #define BOSS_SPAWN_EVERY 3.0f      /* with a boss up, one lost is made good only slowly */
@@ -151,6 +154,14 @@ enum { SHOT_GUN, SHOT_FLAK, SHOT_BOSS, SHOT_HEAVY,
 #define SCORES_TIME     8.0f
 #define CAST_TIME       12.0f
 #define HOWTO_TIME      31.0f       /* how to play: the yoke shown from both sides */
+#define HOWTO_BUTTONS   10.0f       /* how to play: when the four buttons begin to be shown, */
+#define HOWTO_EACH      3.5f        /* and how long each (fire, look back, faster, slower) */
+#define HOWTO_SHOT_AT   0.5f        /* into fire's turn: a burst of HOWTO_SHOTS, one each HOWTO_SHOT_EVERY */
+#define HOWTO_SHOTS     5
+#define HOWTO_SHOT_EVERY 0.18f
+#define ITEMS_TIME      12.0f       /* the items and where they come from (attract page, and after how to play) */
+#define TUTORIAL_TIME   (HOWTO_TIME + ITEMS_TIME)
+#define CONTINUE_TIME   10.0f       /* the last plane lost: seconds to press START and fly on */
 #define DEMO_TIME       30.0f
 #define INITIALS_TIMEOUT 30.0f
 #define NOTICE_TIME     2.0f
@@ -160,13 +171,14 @@ enum { ATTRACT, INITIALS, INTRO, PLAYING, DYING, WARP, GAME_OVER,
        BOSSINTRO,  /* the boss comes: a warning, and a look at it and its weak points before the fight */
        BOSSTURN,   /* between two stages of its fight: what it brings out next is watched coming out */
        LEVELIN,    /* an era begins: the time tunnel opens in its sky and the plane comes out of it */
-       DEBUGSEL    /* DEBUG_LEVEL_SELECT: before a game, where to begin it */
+       DEBUGSEL,   /* DEBUG_LEVEL_SELECT: before a game, where to begin it */
+       TUTORIAL    /* after START: how to play with the yoke, then the items; to lounge music; START skips it */
 };
 
 /* DEBUG_LEVEL_SELECT (the choice of where to begin, for testing) is set in
  * service.h, so that the service menu sees it too. */
 
-enum { PAGE_TITLE, PAGE_SCORES, PAGE_CAST, PAGE_HOWTO };
+enum { PAGE_TITLE, PAGE_SCORES, PAGE_CAST, PAGE_HOWTO, PAGE_ITEMS };
 enum { YOKE_RIGHT_TRIGGER, YOKE_LEFT_TRIGGER, YOKE_RIGHT_THUMB, YOKE_LEFT_THUMB, YOKE_PLACES };
 
 enum {
@@ -334,7 +346,7 @@ extern const struct boss bosses[ERA_COUNT];
 #define HEAVY_KILLS     3           /* what a big one counts towards the boss */
 #define DMG_BOMB        20.0f
 #define CHUTE_SIZE      1.7f        /* a parachutist: metres for one unit of his drawing (he is 11 units tall with the canopy) */
-#define CHUTE_SAFE      3.0f        /* seconds after he is out in which no shot touches him: the burst that shot his plane down is still coming */
+#define CHUTE_SAFE      1.5f        /* seconds after he is out in which no shot touches him: the burst that shot his plane down is still coming (3 until 2026-10-21) */
 #define MISSILE_POINTS  200         /* a missile shot out of the air */
 #define CHUTE_POINTS    1000        /* the first parachutist; each one after it 1000 more */
 #define CHUTE_POINTS_MAX 5000
@@ -405,6 +417,7 @@ struct game_state {
         int score, lives, next_extra;
         int level, kills;           /* the era, and how far into it */
         int out;                    /* no planes left */
+        int best;                   /* the best score before a continue took it back to 0: it still counts for the table */
     } pl[2];
     int  over_player;               /* at the end: whose initials are asked for next */
     int  level, era, loop;          /* level counts up; era = level mod 5; loop = level div 5 */
@@ -487,7 +500,8 @@ struct game_state {
     } tun;
 
     /* the view and the settings */
-    int   chase, chase_ini;
+    int   chase, hud_only;            /* the view now: from behind; else the display without the cockpit round it */
+    int   view_ini;                   /* the view a game starts in (VIEW_)*/
     int   start_lives, difficulty, bonus_plane, kills_per_era;
     float yoke_sens;
     int   control_stick;              /* 0: flown with the yoke; 1: with a stick and buttons, whose switches are eased into a travel */
@@ -499,10 +513,18 @@ struct game_state {
     int   beam_limit;                 /* thousand board units of beam travel a frame that count as full load, 100..250 */
     char  version[16];                /* as game.ini says, shown small on the title */
     int   level_select;               /* DEBUG_LEVEL_SELECT built in: START opens it (the service menu can turn it off) */
-    int   occlusion;                  /* the buildings are solid: what is behind them is not seen */
-    int   cockpit_frame;              /* the cockpit's blue lines are drawn round the head-up display */
+    int   invincible;                 /* for testing: hits, the ground, buildings and the tunnel's wall do no harm */
+    int   setup, setup_done;          /* the first start's setup (setup.h) is open; it has been gone through once */
+    int   continues;                  /* the last plane lost, START flies on (without the score) */
+    /* Waiting for a continue: while cont_time runs nothing moves (the picture
+     * stands as it was); then the plane is lost for good. cont_level is the
+     * era it would fly on in, cont_tunnel says it was lost in the tunnel. */
+    float cont_time;
+    int   cont_level, cont_tunnel;
+    int   occlusion;                 /* the buildings are solid: what is behind them is not seen */
     float bright[BRIGHT_COUNT];
     char  btn_fire[128], btn_faster[128], btn_slower[128], btn_rear[128];   /* vpbind.h's controls */
+    char  menu_key[128];            /* opens the service menu besides F2 */
     /* Which of the yoke's buttons, by the number it reports, sits where:
      * right trigger, left trigger, right thumb, left thumb (YOKE_PLACES).
      * The yoke does not say; the service menu asks. For how to play. */
@@ -690,8 +712,13 @@ void draw_rotors(const obj *o, const vp_xf *body);
 vp_xf flyer_place(const obj *o);
 void draw_burner(const vp_xf *place, float power);
 void draw_coin_line(void);
+void draw_item(vp_vec3 at, int item, float size, float turn);
+void draw_mystery(vp_vec3 at, float size, float turn);
+void draw_continue(void);
 
 /* attract.c */
+void draw_items_page(int tutorial);
+void howto_sounds(float t);
 void draw_title(void);
 void draw_scores(void);
 void draw_cast(void);

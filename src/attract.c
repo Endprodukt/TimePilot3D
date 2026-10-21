@@ -9,6 +9,7 @@ static void fit_text(const char *s, float y, float width, float height, int r, i
 static void wire_box(const vp_xf *at, float x0, float y0, float z0, float x1, float y1, float z1);
 static int place_of(const char *control);
 static void call_out(vp_vec3 at, const char *word, int lit);
+static void howto_shots(const vp_xf *plane, float into);
 
 /* --- attract mode ---------------------------------------------------------------- */
 
@@ -141,6 +142,89 @@ void draw_cast(void)
     draw_coin_line();
 }
 
+/* The items: each one turning in its colour, with what it does; under them
+ * where they come from - a gate the plane flies through, a depot shot to
+ * pieces - each as it stands on the ground, with the mark that shows it.
+ * In attract mode after who is who, and after how to play (`tutorial`). */
+
+void draw_items_page(int tutorial)
+{
+    static const char *const does[ITEM_COUNT][2] = {
+        { "TAKES", "HITS" }, { "", "HOMING" }, { "SECONDS", "" }, { "FULL", "ENERGY" }, { "FOOL", "MISSILES" }
+    };
+    float t = (float)G.frames / 60.0f, gate_turn = 0.9f + 0.25f * sinf(t * 0.4f), u;
+    char buf[64];
+    vp_xf gate, depot;
+    int i;
+
+    world_pose(vp_v3(0, 0, 0), 0, 0, 0);
+    big_text(tutorial ? "GET ITEMS" : "ITEMS", 3500, 2200, 200, 255, 255, 0);
+    for (i = 0; i < ITEM_COUNT; i++) {
+        vp_vec3 at = vp_v3(((float)i - 2.0f) * 30.0f, 36.0f, 150.0f);
+        const unsigned char *c = item_rgb[i];
+        float sx, sy;
+        world_level(G.bright[BRIGHT_EFFECTS]);
+        draw_item(at, i, 5.5f, t * 1.5f + (float)i);
+        if (!world_project(vp_v3(at.x, at.y - 9.0f, at.z), &sx, &sy)) continue;
+        text(item_names[i], sx, sy, 62, VP_TEXT_CENTER, c[0], c[1], c[2]);
+        /* what it does, the number from the game's own rules */
+        if (i == ITEM_SHIELD) snprintf(buf, sizeof buf, "%s %d %s", does[i][0], SHIELD_HITS, does[i][1]);
+        else if (i == ITEM_MISSILES) snprintf(buf, sizeof buf, "%d %s", MISSILE_LOAD, does[i][1]);
+        else if (i == ITEM_TRIPLE) snprintf(buf, sizeof buf, "%d %s", (int)TRIPLE_TIME, does[i][0]);
+        else snprintf(buf, sizeof buf, "%s %s", does[i][0], does[i][1]);
+        text(buf, sx, sy - 110.0f, 50, VP_TEXT_CENTER, 200, 200, 200);
+        if (i == ITEM_FLARES) text("FROM 1970", sx, sy - 200.0f, 50, VP_TEXT_CENTER, 200, 200, 200);
+    }
+
+    /* a gate, and the plane flying through it now and then */
+    gate = vp_xf_mul2(vp_xf_translate(-40.0f, -16.0f, 150.0f), vp_xf_mul2(vp_xf_rot_y(gate_turn), vp_xf_scale(0.42f, 0.42f, 0.42f)));
+    world_level(G.bright[BRIGHT_GROUND] * 1.6f);
+    city_draw_site(CITY_GATE, &gate);
+    u = fmodf(t, 4.0f) / 2.5f;                  /* through it in two and a half seconds, then a pause */
+    world_level(G.bright[BRIGHT_EFFECTS]);
+    if (u < 0.55f || ((G.frames / 10) & 1)) draw_mystery(vp_xf_point(&gate, vp_v3(0, 17.0f, 0)), 3.0f, t * 2.0f);
+    if (u < 1.0f) {
+        vp_vec3 at = vp_xf_point(&gate, vp_v3(0, 17.0f, -90.0f + 180.0f * u));
+        vp_xf plane = vp_xf_mul2(world_place(at, gate_turn, 0, 0), vp_xf_scale(0.42f, 0.42f, 0.42f));
+        world_level(G.bright[BRIGHT_PLAYER]);
+        model_draw(MODEL_PLAYER, &plane, TINT_OWN);
+    }
+
+    /* a depot, shot at */
+    depot = vp_xf_mul2(vp_xf_translate(34.0f, -16.0f, 150.0f), vp_xf_mul2(vp_xf_rot_y(0.5f + 0.2f * t), vp_xf_scale(0.55f, 0.55f, 0.55f)));
+    world_level(G.bright[BRIGHT_GROUND] * 1.6f);
+    city_draw_site(CITY_DEPOT, &depot);
+    world_level(G.bright[BRIGHT_EFFECTS]);
+    if ((G.frames / 12) & 1) draw_mystery(vp_xf_point(&depot, vp_v3(0, 37.0f, 0)), 2.5f, t * 2.0f);
+    world_rgb(255, 255, 160);
+    for (i = 0; i < 3; i++) {                   /* shots going in */
+        float k = fmodf(t * 2.2f + (float)i / 3.0f, 1.0f);
+        vp_vec3 from = vp_v3(22.0f, 6.0f, 95.0f), to = vp_xf_point(&depot, vp_v3(0, 14.0f, 0));
+        vp_vec3 a = vp_v3_add(from, vp_v3_scale(vp_v3_sub(to, from), k));
+        vp_vec3 b = vp_v3_add(from, vp_v3_scale(vp_v3_sub(to, from), k + 0.06f));
+        world_line(a, b);
+    }
+    {
+        float sx, sy;
+        if (world_project(vp_v3(-40.0f, -21.0f, 150.0f), &sx, &sy)) {
+            text("FLY THROUGH", sx, sy, 70, VP_TEXT_CENTER, 255, 170, 40);
+            text("A GATE", sx, sy - 110.0f, 70, VP_TEXT_CENTER, 255, 170, 40);
+        }
+        if (world_project(vp_v3(34.0f, -21.0f, 150.0f), &sx, &sy)) {
+            snprintf(buf, sizeof buf, "SHOOT A DEPOT %d TIMES", DEPOT_HITS);
+            text(buf, sx, sy, 70, VP_TEXT_CENTER, 255, 255, 255);
+            text("THEN FLY INTO THE ITEM", sx, sy - 110.0f, 70, VP_TEXT_CENTER, 255, 255, 255);
+        }
+    }
+    /* and the parachutists: energy, and a bonus for one shot by mistake and caught all the same */
+    fit_text("PARACHUTES - FLY INTO THEM FOR ENERGY", 1000, 3500, 80, 255, 255, 255);
+    snprintf(buf, sizeof buf, "SHOT ONE BY MISTAKE - CATCH HIM AS HE FALLS  %d", CHUTE_CATCH_POINTS);
+    fit_text(buf, 890, 3500, 80, 255, 255, 255);
+    snprintf(buf, sizeof buf, "THE ? SHOWS WHERE   EVERY ITEM %d", ITEM_POINTS);
+    fit_text(buf, 740, 3500, 90, 80, 255, 255);
+    draw_coin_line();
+}
+
 /* --- how to play ------------------------------------------------------------------
  *
  * The yoke, in the round, and the player's own plane beside it doing what
@@ -155,6 +239,37 @@ void draw_cast(void)
  * cone a grip that leans in at its top - a round button for the thumb
  * high on its back, a trigger on its front. The box turns with the hands
  * as a wheel does; the grips tilt on the cones' axis. */
+
+/* Fire's turn: the burst the plane shoots, as tracers from both guns
+ * going away ahead of it (in the plane's own frame; its nose is +z). */
+static void howto_shots(const vp_xf *plane, float into)
+{
+    int i, side;
+    world_level(G.bright[BRIGHT_SHOTS]);
+    world_rgb(255, 255, 160);
+    for (i = 0; i < HOWTO_SHOTS; i++) {
+        float age = into - HOWTO_SHOT_AT - HOWTO_SHOT_EVERY * (float)i, z;
+        if (age < 0 || age > 0.6f) continue;
+        z = 6.0f + 90.0f * age;
+        for (side = -1; side <= 1; side += 2)
+            world_line(vp_xf_point(plane, vp_v3(1.6f * (float)side, -0.2f, z)), vp_xf_point(plane, vp_v3(1.6f * (float)side, -0.2f, z + 14.0f)));
+    }
+}
+
+/* What how to play is heard with: nothing all the way through but the
+ * burst of fire's turn and the afterburner lighting at faster's. Once a
+ * step, with the time `t` how to play has been on (the same on either
+ * page, the yoke's and the stick's). */
+void howto_sounds(float t)
+{
+    float fire = HOWTO_BUTTONS + HOWTO_SHOT_AT, faster = HOWTO_BUTTONS + 2.0f * HOWTO_EACH;
+    int i;
+    for (i = 0; i < HOWTO_SHOTS; i++) {
+        float at = fire + HOWTO_SHOT_EVERY * (float)i;
+        if (t >= at && t - DT < at) sound_fx(FX_SHOT);
+    }
+    if (t >= faster && t - DT < faster) sound_fx(FX_BURNER);
+}
 
 /* The twelve edges of a box. */
 static void wire_box(const vp_xf *at, float x0, float y0, float z0, float x1, float y1, float z1)
@@ -224,7 +339,7 @@ void draw_howto(void)
 {
     /* when what is shown: turning, pushing, the four buttons one after the other, the roll, START */
     enum { FIRE, REAR, FASTER, SLOWER, DOES };
-    const float T_PUSH = 5.0f, T_BUTTONS = 10.0f, EACH = 3.5f, T_ROLL = T_BUTTONS + 4.0f * EACH, T_START = T_ROLL + 4.5f;
+    const float T_PUSH = 5.0f, T_BUTTONS = HOWTO_BUTTONS, EACH = HOWTO_EACH, T_ROLL = T_BUTTONS + 4.0f * EACH, T_START = T_ROLL + 4.5f;
     static const char *const does[DOES] = { "FIRE", "LOOK BACK", "FASTER", "SLOWER" };
     static const char *const place_words[YOKE_PLACES] = { "RIGHT TRIGGER", "LEFT TRIGGER", "RIGHT THUMB BUTTON", "LEFT THUMB BUTTON" };
     const char *const laid[DOES] = { G.btn_fire, G.btn_rear, G.btn_faster, G.btn_slower };
@@ -334,6 +449,7 @@ void draw_howto(void)
         world_level(G.bright[BRIGHT_PLAYER]);
         model_draw(MODEL_PLAYER, &plane, TINT_OWN);
         if (step == FASTER || step == SLOWER || rolling) draw_burner(&plane, step == FASTER ? 1.0f : step == SLOWER ? 0.12f : 0.6f);
+        if (step == FIRE) howto_shots(&plane, t - T_BUTTONS);
     }
 
     /* what is being shown, in words: for a button what it does, and where it is */
@@ -352,7 +468,7 @@ void draw_howto(void)
     else if (t < T_BUTTONS) { line1 = G.invert_pitch ? "PUSH TO CLIMB - PULL TO DIVE" : "PUSH TO DIVE - PULL TO CLIMB"; line2 = "ALL THE WAY ROUND MAKES A LOOP"; }
     else if (step >= 0) { line1 = does[step]; line2 = where; }
     else if (rolling) { line1 = "FASTER AND SLOWER TOGETHER"; line2 = "NOW THE YOKE ROLLS THE PLANE"; }
-    else { line1 = "START CHANGES THE VIEW"; line2 = "COCKPIT OR FROM BEHIND"; }
+    else { line1 = "START CHANGES THE VIEW"; line2 = "HUD ONLY, COCKPIT, FROM BEHIND"; }
     fit_text(line1, 1150, 3500, 170, 255, 255, 255);
     fit_text(line2, 930, 3500, 105, 0, 255, 190);
     if (step == FASTER) fit_text("LET GO AND THE SPEED GOES BACK TO THE MIDDLE", 760, 3300, 80, 0, 200, 150);
@@ -368,7 +484,7 @@ void draw_howto(void)
 void draw_howto_stick(void)
 {
     enum { FIRE, REAR, FASTER, SLOWER, DOES };
-    const float T_PUSH = 5.0f, T_BUTTONS = 10.0f, EACH = 3.5f, T_ROLL = T_BUTTONS + 4.0f * EACH, T_START = T_ROLL + 4.5f;
+    const float T_PUSH = 5.0f, T_BUTTONS = HOWTO_BUTTONS, EACH = HOWTO_EACH, T_ROLL = T_BUTTONS + 4.0f * EACH, T_START = T_ROLL + 4.5f;
     static const char *const does[DOES] = { "FIRE", "LOOK BACK", "FASTER", "SLOWER" };
     const char *const laid[DOES] = { G.btn_fire, G.btn_rear, G.btn_faster, G.btn_slower };
     float t = G.state_time;
@@ -474,6 +590,7 @@ void draw_howto_stick(void)
         world_level(G.bright[BRIGHT_PLAYER]);
         model_draw(MODEL_PLAYER, &plane, TINT_OWN);
         if (step == FASTER || step == SLOWER || rolling) draw_burner(&plane, step == FASTER ? 1.0f : step == SLOWER ? 0.12f : 0.6f);
+        if (step == FIRE) howto_shots(&plane, t - T_BUTTONS);
     }
 
     /* in words */
@@ -492,7 +609,7 @@ void draw_howto_stick(void)
     else if (t < T_BUTTONS) { line1 = G.invert_pitch ? "UP TO CLIMB - DOWN TO DIVE" : "UP TO DIVE - DOWN TO CLIMB"; line2 = "ALL THE WAY ROUND MAKES A LOOP"; }
     else if (step >= 0) { line1 = does[step]; line2 = where; }
     else if (rolling) { line1 = "FASTER AND SLOWER TOGETHER"; line2 = "NOW THE STICK ROLLS THE PLANE"; }
-    else { line1 = "START CHANGES THE VIEW"; line2 = "COCKPIT OR FROM BEHIND"; }
+    else { line1 = "START CHANGES THE VIEW"; line2 = "HUD ONLY, COCKPIT, FROM BEHIND"; }
     fit_text(line1, 1150, 3500, 170, 255, 255, 255);
     fit_text(line2, 930, 3500, 105, 0, 255, 190);
     if (step == FASTER) fit_text("LET GO AND THE SPEED GOES BACK TO THE MIDDLE", 760, 3300, 80, 0, 200, 150);
@@ -524,5 +641,5 @@ void draw_initials(void)
         world_rgb(0, 200, 255);
         world_bline(x - 130, 1820, x + 130, 1820);
     }
-    text("YOKE - LETTER    FIRE - NEXT", CX, 1300, 90, VP_TEXT_CENTER, 0, 200, 0);
+    text("YOKE - LETTER    FIRE OR START - NEXT", CX, 1300, 90, VP_TEXT_CENTER, 0, 200, 0);
 }

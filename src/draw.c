@@ -2,6 +2,7 @@
  * its cockpit, the game's own display, the boss's fall and the journey
  * through time. Board units for what lies flat on the picture. */
 #include "game_internal.h"
+#include "setup.h"
 
 /* this file's own, in the order below */
 static void board_dot(float x, float y);
@@ -9,8 +10,6 @@ static int flyer_tint(const obj *o);
 static void draw_flyer(const obj *o);
 static void draw_cut(const obj *o, int tint);
 static void draw_wreckage(vp_vec3 eye);
-static void draw_item(vp_vec3 at, int item, float size, float turn);
-static void draw_mystery(vp_vec3 at, float size, float turn);
 static void draw_sites(vp_vec3 eye);
 static void draw_items_hud(void);
 static void draw_boss_parts(const obj *o, const vp_xf *place);
@@ -594,7 +593,7 @@ static void draw_wreckage(vp_vec3 eye)
 /* An item where it is: a square standing on its corner, turning, in the
  * item's colour, with its letter in the middle. */
 
-static void draw_item(vp_vec3 at, int item, float size, float turn)
+void draw_item(vp_vec3 at, int item, float size, float turn)
 {
     const unsigned char *c = item_rgb[item % ITEM_COUNT];
     vp_vec3 a = vp_v3(size * cosf(turn), 0, size * sinf(turn)), up = vp_v3(0, size, 0);
@@ -606,7 +605,7 @@ static void draw_item(vp_vec3 at, int item, float size, float turn)
     world_line(vp_v3_add(at, up), vp_v3_sub(at, a));
     world_line(vp_v3_sub(at, a), vp_v3_sub(at, up));
     world_line(vp_v3_sub(at, up), vp_v3_add(at, a));
-    if (d < 700.0f && d > 1.0f && world_project(at, &sx, &sy)) {
+    if (d < 700.0f && d > 1.0f && !world_hidden(at) && world_project(at, &sx, &sy)) {
         float h = clampf(size * 3400.0f / d * 0.9f, 40.0f, 400.0f);
         world_text(letter, sx, sy - h * 0.5f, h, VP_TEXT_CENTER);
     }
@@ -616,7 +615,7 @@ static void draw_item(vp_vec3 at, int item, float size, float turn)
  * turning, with a question mark in it. Which item it is nobody knows
  * until it is won. */
 
-static void draw_mystery(vp_vec3 at, float size, float turn)
+void draw_mystery(vp_vec3 at, float size, float turn)
 {
     vp_vec3 a = vp_v3(size * cosf(turn), 0, size * sinf(turn)), up = vp_v3(0, size, 0);
     float sx, sy, d = dist3(at, vp3d_eye(world_view()));
@@ -626,7 +625,7 @@ static void draw_mystery(vp_vec3 at, float size, float turn)
     world_line(vp_v3_add(at, up), vp_v3_sub(at, a));
     world_line(vp_v3_sub(at, a), vp_v3_sub(at, up));
     world_line(vp_v3_sub(at, up), vp_v3_add(at, a));
-    if (d < 700.0f && d > 1.0f && world_project(at, &sx, &sy)) {
+    if (d < 700.0f && d > 1.0f && !world_hidden(at) && world_project(at, &sx, &sy)) {
         float h = clampf(size * 3400.0f / d * 0.9f, 40.0f, 400.0f);
         vp_text_font(VP_FONT_HERSHEY);          /* the arcade lettering has no question mark worth the name */
         vp_text(world_dvg(), "?", sx, sy - h * 0.5f, h, VP_TEXT_CENTER);
@@ -935,7 +934,7 @@ static void draw_objects(void)
         float sx, sy, d;
         char buf[16];
         if (o->kind != K_SCORE) continue;
-        if (!world_project(o->pos, &sx, &sy)) continue;
+        if (world_hidden(o->pos) || !world_project(o->pos, &sx, &sy)) continue;     /* behind the cockpit or a building: not seen */
         d = dist3(o->pos, eye);
         if (d > 900.0f) continue;
         snprintf(buf, sizeof buf, "%d", o->value);
@@ -1033,7 +1032,6 @@ static void draw_plane_hud(int cockpit)
     h.throttle = G.p.throttle;
     h.energy = G.p.energy / ENERGY_FULL;
     h.cockpit = cockpit;
-    h.frame = G.cockpit_frame;
     h.energy_y = G.demo ? HUD_ENERGY_Y_DEMO : HUD_ENERGY_Y;
     h.burner = G.p.burner > 0.3f;
     h.rear = G.p.rear;
@@ -1163,6 +1161,139 @@ static void draw_radar(void)
     }
 }
 
+/* The cockpit round the head-up display: the instrument panel under its
+ * coaming with the hood over the display, three dials, the sills up the
+ * sides and the canopy's bows over the head, the display's glass. It is
+ * laid out on the board as it is seen, and set COCKPIT_DEPTH in front of
+ * the eye (world_board_points), so that it moves with the view and - with
+ * SOLID OBJECTS - hides what is behind it as anything solid does: panel,
+ * sills and bows are faces, the glass is not. Its lines are always drawn
+ * whole (world_set_nocut). The head-up display and the game's own display
+ * are board lines and go over it. */
+
+#define COCKPIT_DEPTH 3.0f              /* metres: past the nearest a face may be (SOLID_NEAR in world.c) */
+
+/* A shape given on the board (x, y pairs): its outline, and with `face`
+ * its face as well. */
+static void cockpit_part(const float *board, int n, int face, int closed)
+{
+    vp_vec3 p[16];
+    int i;
+    if (n > 16) n = 16;
+    world_board_points(board, n, COCKPIT_DEPTH, p);
+    if (face && n <= 8 && world_solid()) { world_group(); world_face(p, n); }
+    for (i = 0; i + 1 < n; i++) world_line(p[i], p[i + 1]);
+    if (closed) world_line(p[n - 1], p[0]);
+}
+
+/* A round dial and its needle, the needle at `value` 0..1 of its sweep. */
+static void cockpit_dial(float cx, float cy, float r, float value)
+{
+    float b[2 * 13], needle[4];
+    float a = 3.927f - 4.712f * clampf(value, 0, 1);       /* from lower left round over the top to lower right */
+    int i;
+    for (i = 0; i < 12; i++) {
+        float t = 6.2831853f * (float)i / 12.0f;
+        b[2 * i] = cx + r * cosf(t);
+        b[2 * i + 1] = cy + r * sinf(t) * (world_vertical() ? 0.75f : 4.0f / 3.0f);
+    }
+    b[24] = b[0]; b[25] = b[1];
+    world_rgb(0, 120, 190);
+    cockpit_part(b, 13, 0, 0);
+    needle[0] = cx; needle[1] = cy;
+    needle[2] = cx + 0.8f * r * cosf(a);
+    needle[3] = cy + 0.8f * r * sinf(a) * (world_vertical() ? 0.75f : 4.0f / 3.0f);
+    world_rgb(255, 170, 60);
+    cockpit_part(needle, 2, 0, 0);
+}
+
+static void draw_cockpit(void)
+{
+    /* the panel: everything below the coaming, its top a low hump */
+    static const float panel[] = { -400, -600, -400, 395, 820, 900, 1400, 1000, 2695, 1000, 3275, 900, 4495, 395, 4495, -600 };     /* past the board's bottom and sides: what runs off the bottom is cut to its end (2026-10-21) */
+    /* its lit edge and the lines up the sides keep off the board's own edge, where they would come
+     * and go with the least shake of the view */
+    static const float edge[] = { 14, 566, 820, 900, 1400, 1000, 2695, 1000, 3275, 900, 4081, 566 };
+    static const float coaming[] = { 14, 526, 820, 860, 1400, 960, 2695, 960, 3275, 860, 4081, 526 };
+    static const float hood[] = { 1400, 1000, 1480, 1100, 2615, 1100, 2695, 1000 };
+    static const float glass[] = { 1330, 1000, 1200, 3260, 2895, 3260, 2765, 1000 };
+    /* each side: its sill up from the panel, the bow over the head in two pieces */
+    static const float sill[] = { 14, 566, 120, 610, 100, 2330, 14, 2300 };
+    static const float bow_low[] = { 14, 2300, 100, 2330, 510, 3470, 420, 3500 };
+    static const float bow_high[] = { 420, 3500, 510, 3470, 1360, 4081, 1250, 4081 };
+    const float *const sides[3] = { sill, bow_low, bow_high };
+    float m[8];
+    int k, j, i;
+
+    world_level(G.bright[BRIGHT_PLAYER]);
+    world_set_nocut(1);
+    world_set_front(1);
+    world_rgb(0, 150, 220);
+    cockpit_part(edge, 6, 0, 0);                        /* the coaming's edge, lit */
+    if (world_solid()) {
+        vp_vec3 p[8];
+        world_board_points(panel, 8, COCKPIT_DEPTH, p);
+        world_group();
+        world_face(p, 8);
+    }
+    world_rgb(0, 80, 130);
+    cockpit_part(coaming, 6, 0, 0);                     /* the pad along it */
+    world_rgb(0, 150, 220);
+    cockpit_part(hood, 4, 1, 0);
+    for (k = 0; k < 3; k++) {
+        for (j = 0; j < 2; j++) {                       /* the left side, then the right as its mirror */
+            for (i = 0; i < 4; i++) {
+                m[2 * i] = j ? 4095.0f - sides[k][2 * i] : sides[k][2 * i];
+                m[2 * i + 1] = sides[k][2 * i + 1];
+            }
+            world_rgb(0, 150, 220);
+            cockpit_part(m, 4, 1, 1);
+        }
+    }
+    world_rgb(0, 90, 150);
+    cockpit_part(glass, 4, 0, 0);
+    /* the dials, in a row in the middle under the hood: the throttle, the speed, the height */
+    cockpit_dial(1610, 815, 95, G.p.throttle);
+    cockpit_dial(CX, 830, 95, (G.p.speed - SPEED_MIN) / (SPEED_TOP - SPEED_MIN));
+    cockpit_dial(4096.0f - 1610.0f, 815, 95, G.p.pos.y / 1000.0f);
+    world_set_front(0);
+    world_set_nocut(0);
+}
+
+/* The planes in reserve, as small triangles, with the word over them. */
+
+static void draw_lives(int lives)
+{
+    int i;
+    text("LIVES", 150, 330, 70, VP_TEXT_LEFT, 0, 255, 255);
+    world_level(G.bright[BRIGHT_TEXT]);
+    world_rgb(0, 255, 255);
+    for (i = 0; i < lives && i < 8; i++) {
+        float x = 200.0f + 150.0f * (float)i, y = 230.0f;
+        world_bline(x - 50, y - 40, x, y + 50);
+        world_bline(x, y + 50, x + 50, y - 40);
+        world_bline(x + 50, y - 40, x - 50, y - 40);
+    }
+}
+
+/* The enemies still to go before the boss: eight marks, and the number. */
+
+static void draw_kill_marks(int marks, int left)
+{
+    char buf[16];
+    int i;
+    world_level(G.bright[BRIGHT_TEXT]);
+    for (i = 0; i < KILL_MARKS; i++) {
+        float x = CX - 420 + 120.0f * (float)i;
+        if (i < marks) world_rgb(255, 200, 0); else world_rgb(50, 40, 0);
+        world_bline(x, 200, x + 80, 200);
+        world_bline(x + 80, 200, x + 40, 270);
+        world_bline(x + 40, 270, x, 200);
+    }
+    snprintf(buf, sizeof buf, "%d", left);
+    text(buf, CX + 620, 190, 90, VP_TEXT_LEFT, 255, 200, 0);
+}
+
 /* The game's own display: the score, the era, the planes left, how many
  * enemies are still to go, the radar, and what the game has to say. */
 
@@ -1200,15 +1331,8 @@ static void draw_hud(void)
      * then along the bottom: its way round the picture's edge */
     draw_radar();
 
-    /* the planes in reserve, as small triangles */
-    world_level(G.bright[BRIGHT_TEXT]);
-    world_rgb(0, 255, 255);
-    for (i = 0; i < G.lives && i < 8; i++) {
-        float x = 200.0f + 150.0f * (float)i, y = 230.0f;
-        world_bline(x - 50, y - 40, x, y + 50);
-        world_bline(x, y + 50, x + 50, y - 40);
-        world_bline(x + 50, y - 40, x - 50, y - 40);
-    }
+    /* the planes in reserve */
+    draw_lives(G.lives);
 
     /* the enemies still to go: eight marks */
     if (left < 0) left = 0;
@@ -1224,15 +1348,7 @@ static void draw_hud(void)
         world_rgb(255, last ? 80 : 220, last ? 80 : 0);
         for (i = 0; i < hp && i < 40; i++) world_bline(CX - 400 + 20.0f * (float)i, 300, CX - 400 + 20.0f * (float)i, 360);
     } else {
-        for (i = 0; i < KILL_MARKS; i++) {
-            float x = CX - 420 + 120.0f * (float)i;
-            if (i < marks) world_rgb(255, 200, 0); else world_rgb(50, 40, 0);
-            world_bline(x, 200, x + 80, 200);
-            world_bline(x + 80, 200, x + 40, 270);
-            world_bline(x + 40, 270, x, 200);
-        }
-        snprintf(buf, sizeof buf, "%d", left);
-        text(buf, CX + 620, 190, 90, VP_TEXT_LEFT, 255, 200, 0);
+        draw_kill_marks(marks, left);
     }
 
     if (G.state == INTRO && G.level_time < INTRO_TIME + 0.5f)
@@ -1258,6 +1374,24 @@ static void draw_cheer(void)
     world_text(G.cheer, CX, 2300.0f - h * 0.5f, h, VP_TEXT_CENTER);
 }
 
+/* The last plane is lost: the picture stands, and over it the question
+ * and the seconds left to answer it. */
+
+void draw_continue(void)
+{
+    char buf[16];
+    int left = (int)ceilf(G.cont_time);
+    int can = G.credits.free_play || vp_credits_enough(&G.credits, 1);
+
+    world_fade(1.0f);
+    if (G.players == 2) text(G.cur ? "PLAYER 2" : "PLAYER 1", CX, 3250, 130, VP_TEXT_CENTER, 255, 255, 255);
+    text("CONTINUE?", CX, 2850, 260, VP_TEXT_CENTER, 255, 255, 0);
+    snprintf(buf, sizeof buf, "%d", left < 0 ? 0 : left);
+    text(buf, CX, 1700, 700, VP_TEXT_CENTER, 255, 80, 80);
+    if ((G.frames / 20) & 1) text(can ? "PRESS START" : "INSERT COIN", CX, 1350, 150, VP_TEXT_CENTER, 255, 255, 255);
+    text("ANY OTHER BUTTON - COUNT FASTER", CX, 960, 70, VP_TEXT_CENTER, 0, 150, 0);
+}
+
 /* Not the original's: it has no coin slot. */
 
 void draw_coin_line(void)
@@ -1268,6 +1402,10 @@ void draw_coin_line(void)
 
     /* always in the same two places at the bottom, on every page of
      * attract mode and over the demo */
+    if (G.state == TUTORIAL) {              /* how to play before the first era: it can be skipped */
+        if ((G.frames / 30) & 1) text("START - SKIP", CX, 520, 120, VP_TEXT_CENTER, 255, 255, 255);
+        return;
+    }
     if (G.credits.free_play) snprintf(buf, sizeof buf, "FREE PLAY");
     else snprintf(buf, sizeof buf, "CREDITS %d", G.credits.credits);
     text(buf, CX, 330, 90, VP_TEXT_CENTER, 0, 255, 0);
@@ -1282,35 +1420,29 @@ static void draw_scene(int era_index, float grow)
     world_level(G.bright[BRIGHT_GROUND]);
     world_rgb(0, 200, 90);
     /* With the beam at its limit the ground is drawn with every second
-     * line, and the sky without its clouds: the fight goes before the view. */
-    world_draw_ground(eye, G.view_heading, world_load() > 0.95f);
+     * line, and the sky without its clouds: the fight goes before the view.
+     * Each switches back only well under where it switched (2026-10-21: at
+     * the edge it went from one to the other every few frames, and the
+     * grid flickered). */
+    static int coarse, no_sky;
+    float load = world_load();
+    coarse = coarse ? load > 0.85f : load > 0.95f;
+    no_sky = no_sky ? load > 0.95f : load > 1.05f;
+    world_draw_ground(eye, G.view_heading, coarse);
     world_level(G.bright[BRIGHT_GROUND] * 1.4f);
-    {
-        /* How far the city reaches. Not further than the monitor wants:
-         * every building is long strokes and long jumps, and a picture
-         * full of them drives the deflection to where an edge of it gives
-         * way (2026-10-14, the left edge in 1982 and 2001 from behind
-         * the plane). Less in 1982 and 2001, with their towers; less
-         * again from behind the plane, which sees more of the ground; and
-         * less still when the beam is near its limit (world_load). It
-         * eases, so the edge of the city does not jump. */
-        static const float era_reach[ERA_COUNT] = { 880.0f, 880.0f, 880.0f, 850.0f, 860.0f };
-        static float reach = 880.0f;
-        float want = era_reach[era_index % ERA_COUNT] * ((G.chase || !G.p.alive) ? 0.96f : 1.0f);
-        float load = world_load();
-        if (load > 0.85f) want *= load > 1.15f ? 0.85f : 1.0f - (load - 0.85f) * 0.5f;
-        reach += (want - reach) * 0.04f;
-        city_set_reach(reach);
-    }
+    /* The city as far as it goes, in every era and view (2026-10-21: the
+     * shorter reach of 0.35.1 was for a monitor whose left edge gave way
+     * under the load; the monitor is mended). */
+    city_set_reach(920.0f);
     city_draw(era_index, eye, (float)G.frames / 60.0f, grow);
     world_level(G.bright[BRIGHT_CLOUDS]);
-    if (world_load() > 1.05f) {
+    if (no_sky) {
         /* nothing in the sky this frame */
     } else if (era_index == 4) {               /* 2001 is far out: rocks drift where the clouds were, and hurt nobody */
         world_rgb(200, 160, 120);
         world_draw_asteroids(eye, (float)G.frames / 60.0f);
     } else {
-        world_rgb(170, 170, 255);
+        world_rgb(235, 238, 245);           /* white, a breath of blue (2026-10-21: they were blue) */
         world_draw_clouds(eye);
     }
     draw_objects();
@@ -1801,6 +1933,7 @@ void game_draw(vp_game *g, vp_dvg *d)
     world_set_solid(G.occlusion);
     draw_frame(d);
     world_flush();          /* what is kept of the 3D world (solid buildings): drawn now */
+    if (G.cont_time > 0 && !G.service && !G.setup) draw_continue();     /* over the picture that stands */
 }
 
 static void draw_frame(vp_dvg *d)
@@ -1811,15 +1944,23 @@ static void draw_frame(vp_dvg *d)
     /* the picture's size: the setting, or what the open service menu has it at just now */
     vp_dvg_set_scale(d, (float)(G.service ? service_picture_size() : G.picture_size) / 100.0f);
     if (G.service) { service_draw(); return; }
+    if (G.setup) { setup_draw(); return; }
 
     if (G.state == ATTRACT) {
         if (G.page == PAGE_TITLE) draw_title();
         else if (G.page == PAGE_SCORES) draw_scores();
         else if (G.page == PAGE_HOWTO) { if (G.control_stick) draw_howto_stick(); else draw_howto(); }
+        else if (G.page == PAGE_ITEMS) draw_items_page(0);
         else draw_cast();
         return;
     }
     if (G.state == INITIALS) { draw_initials(); return; }
+    if (G.state == TUTORIAL) {
+        /* the yoke's, whatever the cabinet is flown with; then the items */
+        if (G.state_time < HOWTO_TIME) draw_howto();
+        else draw_items_page(1);
+        return;
+    }
 #if DEBUG_LEVEL_SELECT
     if (G.state == DEBUGSEL) {              /* FOR TESTING, TO BE TAKEN OUT: where to begin */
         char buf[64];
@@ -1844,6 +1985,9 @@ static void draw_frame(vp_dvg *d)
 
     /* An era the plane has just come to fades in, its buildings rising. */
     chase = set_camera();
+    /* the cockpit first: its faces have to be there before anything that
+     * is put on the board at a place in the world asks whether it is hidden */
+    if (!chase && !G.hud_only && !G.p.rear && G.p.alive) draw_cockpit();
     world_fade(smooth(G.level_time / 1.0f));
     draw_scene(G.era, smooth(G.level_time / GROW_TIME));
     world_fade(1.0f);

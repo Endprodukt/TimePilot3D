@@ -44,6 +44,7 @@ add_executable(timepilot3d
     src/objects.c
     src/player.c
     src/service.c
+    src/setup.c
     src/sound.c
     src/world.c)
 target_include_directories(timepilot3d PRIVATE src)

@@ -225,28 +225,6 @@ static void missile_warning(const hud_state *s)
     world_text("MISSILE", CX, 2880.0f, 130.0f, VP_TEXT_CENTER);
 }
 
-/* The cockpit: the coaming with its hump, the frame of the display's
- * glass, and the canopy's bow at both sides. */
-static void cockpit(void)
-{
-    world_rgb(0, 150, 220);
-    world_bline(0, 560, 820, 900);
-    world_bline(820, 900, 1400, 1000);
-    world_bline(1400, 1000, 2695, 1000);
-    world_bline(2695, 1000, 3275, 900);
-    world_bline(3275, 900, 4095, 560);
-    /* the glass */
-    world_rgb(0, 90, 150);
-    world_bline(1330, 1000, 1200, 3260);
-    world_bline(1200, 3260, 2895, 3260);
-    world_bline(2895, 3260, 2765, 1000);
-    /* the canopy */
-    world_bline(0, 2300, 420, 3500);
-    world_bline(420, 3500, 1250, 4095);
-    world_bline(4095, 2300, 3675, 3500);
-    world_bline(3675, 3500, 2845, 4095);
-}
-
 /* Looking back: the picture in a mirror's frame, with its corners cut. */
 static void mirror(const hud_state *s)
 {
@@ -270,7 +248,6 @@ void hud_draw(const hud_state *s)
     if (s->rear) {
         mirror(s);
     } else if (s->cockpit) {
-        if (s->frame) cockpit();
         green();
         /* a hit: the display breaks up for a moment, every other frame gone */
         if (!(s->hurt > 0 && (s->frames & 1))) {

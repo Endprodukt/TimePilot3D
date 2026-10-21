@@ -54,7 +54,12 @@ static void spawn_enemy(void)
 {
     const struct era *e = era();
     obj *o = new_obj(K_ENEMY);
-    float bearing = frand() * PI2, d = SPAWN_NEAR + frand() * (SPAWN_FAR - SPAWN_NEAR);
+    /* Mostly ahead, within 60 degrees of the way the plane goes, and a
+     * few from anywhere (2026-10-21: from all round, and one flying straight
+     * on met nearly nobody - what was behind could not catch up). */
+    float course = course_of(G.p.heading, G.p.pitch);
+    float bearing = frand() < SPAWN_AHEAD ? course + (frand() - 0.5f) * 2.1f : frand() * PI2;
+    float d = SPAWN_NEAR + frand() * (SPAWN_FAR - SPAWN_NEAR);
     vp_vec3 to;
 
     if (!o) return;
@@ -487,6 +492,9 @@ static void enemy_evades(obj *o, float turn, float speed)
 #define ENGAGE_REST   3.5f          /* seconds it then keeps away */
 #define TAIL_NEAR     260.0f        /* metres behind the player that count as on its tail */
 #define LOITER_RANGE  420.0f        /* metres from the player the ones that wait circle at */
+#define LOITER_SPREAD 0.9f          /* radians either side of the player's course their places reach */
+#define LOITER_LEAD   3.0f          /* seconds ahead: they circle where the player will be */
+#define LEFT_BEHIND   400.0f        /* metres behind: one that is not on the tail goes, and another comes from ahead */
 
 /* Is this one on the player in this step? Called once a step for every
  * enemy that fights; it keeps the count and the plane's own clock (see
@@ -526,11 +534,17 @@ static vp_vec3 attack_target(obj *o, float d, float speed)
     if (!takes_part(o, tailing)) {
         /* waiting, or resting: round the player in a wide circle */
         /* Each has its own place on the circle (its `phase`, drifting
-         * slowly), so they stand all round the player and not in one
-         * crowd; it goes there along the circle, not across the middle. */
-        float here = atan2f(rel.x, rel.z), place = o->phase + o->side * o->age * 0.05f;
+         * slowly), so they stand round the player and not in one crowd;
+         * it goes there along the circle, not across the middle. The
+         * places are ahead of the player and to its sides, counted from
+         * the way it goes, round where it will be in a few seconds: one
+         * flying straight on flies into them (2026-10-21: the places were
+         * fixed in the world, and what was left behind stayed behind). */
+        vp_vec3 soon = vp_v3_add(G.p.pos, vp_v3_scale(player_velocity(), LOITER_LEAD));
+        float course = course_of(G.p.heading, G.p.pitch), here = atan2f(o->pos.x - soon.x, o->pos.z - soon.z);
+        float place = course + LOITER_SPREAD * sinf(o->phase + o->side * o->age * 0.05f);
         float bearing = here + clampf(wrap_angle(place - here), -0.7f, 0.7f);
-        target = vp_v3_add(G.p.pos, vp_v3(sinf(bearing) * LOITER_RANGE, o->offset.y + 40.0f * o->side, cosf(bearing) * LOITER_RANGE));
+        target = vp_v3_add(soon, vp_v3(sinf(bearing) * LOITER_RANGE, o->offset.y + 40.0f * o->side, cosf(bearing) * LOITER_RANGE));
         o->speed += (speed - o->speed) * 0.04f;
         return target;
     }
@@ -691,6 +705,8 @@ void update_enemy(obj *o)
     o->spin += 30.0f * DT;
     if (o->flash > 0) o->flash--;
     if (d > DESPAWN) { o->kind = K_NONE; return; }      /* lost: another will come */
+    if (!o->form && !o->heavy && !o->escort && d > LEFT_BEHIND && G.state == PLAYING
+        && vp_v3_dot(player_forward(), vp_v3_sub(o->pos, G.p.pos)) < -0.5f * d) { o->kind = K_NONE; return; }     /* left behind: it comes again from ahead (spawn_enemy) */
 
     if (o->escort) { escort_fly(o); if (o->escort) return; }
     if (o->form || o->heavy) {                           /* on its course, whatever happens */

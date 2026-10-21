@@ -11,7 +11,7 @@
  *   coin1 / coin2           a credit
  *   start1                  start; in a game: cockpit / chase view
  *   start2                  start for two players taking turns (two credits)
- *   TAB                     the service menu (settings)
+ *   F2                      the service menu (settings; more in CONTROLS, MENU BUTTON)
  */
 #include <vectorpie/vp.h>
 
@@ -51,6 +51,8 @@ int main(int argc, char **argv)
     if (env) game_cheat_kills(atoi(env));
     if (getenv("TP3D_ITEMS")) game_cheat_items();           /* a testing aid: see game.h */
     if (getenv("TP3D_SERVICE")) game_cheat_service();      /* a testing aid: see game.h */
+    if (getenv("TP3D_CONTINUE")) game_cheat_continue();    /* a testing aid: see game.h */
+    if (getenv("TP3D_SETUP")) game_cheat_setup(atoi(getenv("TP3D_SETUP")));          /* a testing aid: see game.h */
     if (getenv("TP3D_BOSS2")) game_cheat_boss2(atoi(getenv("TP3D_BOSS2")));          /* a testing aid: see game.h */
     if (getenv("TP3D_DEBUGSEL")) game_cheat_debugsel(atoi(getenv("TP3D_DEBUGSEL")));    /* a testing aid: see game.h */
     if (getenv("TP3D_WEAK")) game_cheat_weak();            /* a testing aid: see game.h */

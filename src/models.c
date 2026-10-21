@@ -478,28 +478,39 @@ static void make_helicopter(void)
 /* 1982: a jet fighter with twin tails. */
 static void make_jet(void)
 {
-    /* Kept plain (2026-10-17: too much detail for a swarm of them): a
-     * nose, one box of a body to the tail, the deltas, the twin fins and
-     * a line of canopy - about 21 lines where there were 38. */
-    int nose, c[4], t[4];
+    /* In full again (2026-10-21; plainer from 0.50.1 to 0.53.0, for a
+     * monitor that could not take the load): a nose, the body in two
+     * boxes with a ring at the middle, the deltas, the tailplanes, the
+     * twin fins, the intakes and a canopy - about 38 lines. */
+    int nose, c[4], m[4], t[4];
     C(0);
     nose = V(0, 0, 7.5f);
     c[0] = V(-0.9f, -0.7f, 2.5f); c[1] = V(0.9f, -0.7f, 2.5f); c[2] = V(0.9f, 0.85f, 2.5f); c[3] = V(-0.9f, 0.85f, 2.5f);
+    m[0] = V(-1.0f, -0.65f, -1.5f); m[1] = V(1.0f, -0.65f, -1.5f); m[2] = V(1.0f, 0.75f, -1.5f); m[3] = V(-1.0f, 0.75f, -1.5f);
     t[0] = V(-0.9f, -0.5f, -6.0f); t[1] = V(0.9f, -0.5f, -6.0f); t[2] = V(0.9f, 0.6f, -6.0f); t[3] = V(-0.9f, 0.6f, -6.0f);
-    cone(c, 4, nose); tube(c, t, 4); loop(t, 4);
+    cone(c, 4, nose); tube(c, m, 4); loop(m, 4); tube(m, t, 4); loop(t, 4);
+    /* the intakes, under the wing roots */
+    mseg(1.0f, -0.65f, 1.2f, 1.4f, -0.9f, 1.0f);
+    mseg(1.4f, -0.9f, 1.0f, 1.0f, -0.65f, -1.5f);
     C(1);
     /* delta wings */
     mseg(0.9f, -0.3f, 0.5f, 5.5f, -0.3f, -4.5f);
     mseg(5.5f, -0.3f, -4.5f, 0.9f, -0.3f, -5.0f);
     { static const float wing[] = { 0.9f, -0.3f, 0.5f, 5.5f, -0.3f, -4.5f, 0.9f, -0.3f, -5.0f }; mfacef(wing, 3); }
+    /* the tailplanes */
+    mseg(0.9f, -0.2f, -4.6f, 3.0f, -0.2f, -6.3f);
+    mseg(3.0f, -0.2f, -6.3f, 0.9f, -0.2f, -6.0f);
+    { static const float tailplane[] = { 0.9f, -0.2f, -4.6f, 3.0f, -0.2f, -6.3f, 0.9f, -0.2f, -6.0f }; mfacef(tailplane, 3); }
     C(2);
     /* twin tails */
     mseg(0.9f, 0.6f, -4.0f, 1.2f, 2.8f, -6.2f);
     mseg(1.2f, 2.8f, -6.2f, 0.9f, 0.6f, -6.0f);
     { static const float fin[] = { 0.9f, 0.6f, -4.0f, 1.2f, 2.8f, -6.2f, 0.9f, 0.6f, -6.0f }; mfacef(fin, 3); }
     C(3);
-    /* the canopy */
-    seg(0, 0.85f, 2.5f, 0, 1.4f, 0.6f);
+    /* the canopy: a bubble over the front box */
+    seg(0, 0.85f, 4.2f, 0, 1.45f, 2.2f);
+    seg(0, 1.45f, 2.2f, 0, 0.8f, -0.2f);
+    mseg(0.55f, 0.85f, 3.4f, 0.45f, 1.15f, 1.2f);
 }
 
 /* 2001: a flying saucer. */

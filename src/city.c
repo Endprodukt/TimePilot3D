@@ -47,7 +47,7 @@ typedef struct building {
 /* How many cells in a hundred hold a building, and how much bigger than
  * life the era's are drawn: a farmhouse at its true size is a dot from
  * the air. */
-static const int   density[5] = { 22, 24, 22, 38, 20 };      /* per cent of the cells built on; 1982 and 2001 thinned twice (were 58 and 30, then 45 and 24) */
+static const int   density[5] = { 22, 24, 22, 58, 30 };      /* per cent of the cells built on (1982 and 2001 thinned for a faulty monitor in 0.31.1 to 0.45.1; back since 2026-10-21) */
 static const float scale[5]   = { 2.2f, 1.6f, 1.6f, 1.0f, 1.0f };
 
 static vp3d_mesh *s_shape[S_COUNT];
@@ -457,6 +457,25 @@ void city_draw(int era, vp_vec3 eye, float time, float grow)
                 }
             }
         }
+    }
+}
+
+/* One special place by itself, as it stands in every era, where `at` puts
+ * it (its foot at the origin of `at`): for the pages that explain it. */
+void city_draw_site(int kind, const vp_xf *at)
+{
+    static const unsigned char colour[4][3] = { { 0, 0, 0 }, { 255, 170, 40 }, { 255, 255, 255 }, { 200, 90, 90 } };
+    building b;
+    int i;
+
+    if (kind < CITY_GATE || kind > CITY_GUN) return;
+    memset(&b, 0, sizeof b);
+    plan_special(&b, kind);
+    world_rgb(colour[kind][0], colour[kind][1], colour[kind][2]);
+    for (i = 0; i < b.n; i++) {
+        const part *p = &b.p[i];
+        vp_xf place = vp_xf_mul2(*at, vp_xf_mul2(vp_xf_translate(p->x, p->y, p->z), vp_xf_scale(p->sx, p->sy, p->sz)));
+        if (world_solid()) shape_solid(p->shape, &place); else world_mesh(s_shape[p->shape], &place);
     }
 }
 

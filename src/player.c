@@ -28,7 +28,7 @@ void damage_player(float amount)
         if (G.p.shield_hits == 0) notice("SHIELD GONE");
         return;
     }
-    G.p.energy -= amount * hard()->damage;
+    if (!G.invincible) G.p.energy -= amount * hard()->damage;     /* testing: felt and seen, no harm */
     G.p.hurt = 0.5f;
     /* It is felt: the view shakes, the harder the hit; sparks and white
      * heat fly off the plane and stream back past the canopy; smoke
@@ -104,7 +104,7 @@ obj *gun_target(float cone, vp_vec3 *aim)
             best_angle = angle;
             best = o;
             /* lead it; of a boss, its nearest gun while it has one */
-            *aim = vp_v3_add(o->kind == K_BOSS ? boss_aim_point(o) : o->pos, vp_v3_scale(o->vel, d / SHOT_SPEED));
+            *aim = vp_v3_add(o->kind == K_BOSS ? boss_aim_point(o) : o->pos, vp_v3_scale(o->vel, d / (SHOT_SPEED + G.p.speed)));
         }
     }
     return best;
@@ -114,19 +114,26 @@ static void fire_guns(void)
 {
     vp_vec3 fwd = player_forward();
     vp_vec3 right = vp_v3(cosf(G.p.heading), 0, -sinf(G.p.heading));
-    vp_vec3 dir = fwd, aim;
+    vp_vec3 dir = fwd, aim, meet;
     int k, shots = G.p.triple > 0 ? 3 : 1;
 
     if (G.aim_assist > 0 && gun_target(ASSIST_CONE * (float)G.aim_assist / 100.0f, &aim))
         dir = vp_v3_normalize(vp_v3_sub(aim, G.p.pos));
+    meet = vp_v3_add(G.p.pos, vp_v3_scale(dir, GUNS_MEET));
     G.p.gun = !G.p.gun;
     for (k = 0; k < shots; k++) {               /* with the triple shot: one straight, one a little to each side */
         obj *s = new_obj(K_SHOT);
         float a = shots == 3 ? 0.05f * (float)(k - 1) : 0, c = cosf(a), n = sinf(a);
+        vp_vec3 way;
         if (!s) return;
         s->pos = vp_v3_add(G.p.pos, vp_v3_scale(right, G.p.gun ? 1.6f : -1.6f));
         s->pos = vp_v3_add(s->pos, vp_v3_scale(fwd, 4.0f));
-        s->vel = vp_v3_scale(vp_v3(dir.x * c - dir.z * n, dir.y, dir.x * n + dir.z * c), SHOT_SPEED);
+        /* Each gun points in a little, so that both cross on the sight's
+         * line GUNS_MEET ahead; and a shot goes with the plane's own speed
+         * on top of its own (2026-10-21: without it the stream fell behind
+         * the nose in every turn). */
+        way = vp_v3_normalize(vp_v3_sub(meet, s->pos));
+        s->vel = vp_v3_add(vp_v3_scale(vp_v3(way.x * c - way.z * n, way.y, way.x * n + way.z * c), SHOT_SPEED), player_velocity());
         s->life = SHOT_LIFE;
     }
     {
@@ -394,7 +401,12 @@ void update_player(vp_input *in)
 
     /* the ground, and what is built on it: the end of the plane, whatever
      * its energy */
-    if (G.p.pos.y <= ALT_CRASH || city_hit(G.era, G.p.pos, 2.5f)) {
+    if (G.invincible && (G.p.pos.y <= ALT_CRASH || city_hit(G.era, G.p.pos, 2.5f))) {
+        /* testing: thrown up over it, nose up, with a jolt */
+        G.p.pos.y = (G.p.pos.y <= ALT_CRASH ? ALT_CRASH : city_top(G.era, G.p.pos.x, G.p.pos.z, 0)) + 15.0f;
+        if (G.p.pitch < 0.3f) G.p.pitch = 0.3f;
+        G.p.shake = clampf(G.p.shake + 0.4f, 0, 1.2f);
+    } else if (G.p.pos.y <= ALT_CRASH || city_hit(G.era, G.p.pos, 2.5f)) {
         if (G.p.pos.y < ALT_CRASH) G.p.pos.y = ALT_CRASH;
         G.p.energy = 0;
         kill_player();
@@ -414,13 +426,14 @@ void update_player(vp_input *in)
 void sound_at(int fx, vp_vec3 at)
 {
     static unsigned rnd = 0x2545F491u;
-    float reach = fx == FX_BIG_EXPLODE ? 650.0f : fx == FX_EXPLODE ? 340.0f : fx == FX_ENEMY_SHOT ? 210.0f : fx == FX_FALL ? 280.0f : 320.0f;
+    float reach = fx == FX_BIG_EXPLODE ? 650.0f : fx == FX_EXPLODE ? 340.0f : fx == FX_ENEMY_SHOT ? 210.0f : fx == FX_FALL ? 280.0f
+                : fx == FX_SCREAM ? 300.0f : 320.0f;
     vp_vec3 to = vp_v3_sub(at, G.p.pos);
     float d = vp_v3_length(to), k = d / reach, gain = 1.0f / (1.0f + powf(k, 1.6f)), r, h = G.view_heading;
     if (gain < 0.03f) return;
     rnd = rnd * 1664525u + 1013904223u;
     r = (float)(rnd >> 8) / 16777216.0f;
-    sound_fx_at(fx, gain, (fx == FX_ENEMY_SHOT ? 0.95f + 0.1f * r : 0.86f + 0.26f * r) * (1.0f - 0.12f * clampf(d / 1500.0f, 0, 1)),
+    sound_fx_at(fx, gain, (fx == FX_ENEMY_SHOT || fx == FX_SCREAM ? 0.95f + 0.1f * r : 0.86f + 0.26f * r) * (1.0f - 0.12f * clampf(d / 1500.0f, 0, 1)),
                 d > 1.0f ? vp_v3_dot(to, vp_v3(cosf(h), 0, -sinf(h))) / d : 0.0f);
 }
 
@@ -641,7 +654,7 @@ void update_tunnel(vp_input *in)
         G.tun.vy = -dy / d * 60.0f;
         if (G.tun.touch <= 0) {
             G.tun.touch = 0.45f;
-            G.p.energy -= DMG_TUNNEL * hard()->damage;
+            if (!G.invincible) G.p.energy -= DMG_TUNNEL * hard()->damage;
             G.p.hurt = 0.35f;
             sound_fx(FX_HIT);
             if (G.p.energy <= 0) {      /* it does not come through */
@@ -659,9 +672,9 @@ void update_tunnel(vp_input *in)
         points = (int)((float)points * (0.5f + G.tun.throttle) / 10.0f + 0.5f) * 10;
         G.tun.ring = ring;
         G.tun.rings++;
-        /* every ring chimes; through its middle higher and louder */
-        if (d < TUNNEL_PERFECT) { G.tun.perfect++; G.tun.good = 0.5f; G.tun.good_points = points; sound_fx_ex(FX_RING, 1.0f, 1.0f); }
-        else sound_fx_ex(FX_RING, 0.55f, 0.75f);
+        /* through its middle a click, loud over the tunnel's music; the
+         * chime on every ring (FX_RING, 0.50.1) got on the nerves (2026-10-21) */
+        if (d < TUNNEL_PERFECT) { G.tun.perfect++; G.tun.good = 0.5f; G.tun.good_points = points; sound_fx_ex(FX_TINK, 2.4f, 1.0f); }
         G.tun.bonus += points;
         add_score(points);
     }

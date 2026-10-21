@@ -22,6 +22,8 @@ techno with metallic percussion.
   tunnel     the time tunnel (TUNNEL_TIME): eight bars of dark acid techno
   boss       a boss comes (BOSSINTRO): an alarm siren, braams, pounding toms
   victory    a boss shot down: a fanfare out of the minor into D major
+  lounge     how to play, after START: relaxed - half time, swing, jazz chords on
+             an electric piano, a vibraphone (the one piece in D major)
 
 The tempo is set by the run into the tunnel: 16 beats in its 7.4 s.
 Written 22050 Hz, mono, 16 bit (the cabinet's speaker is one; music is
@@ -640,6 +642,89 @@ def boss():
     s.kick(T(4), 0.9)
     return s.mix(pump=0.3), None
 
+# --- the lounge: how to play, before the first era ----------------------------
+
+LOUNGE = [(['B3', 'D4', 'F#4', 'A4'], 'G2'),       # Gmaj9
+          (['A3', 'C#4', 'E4', 'G#4'], 'F#2'),     # F#m7 (add 9 on top: G#)
+          (['G3', 'B3', 'D4', 'F#4'], 'E2'),       # Em9
+          (['G3', 'C#4', 'F#4', 'B4'], 'A2')]      # A13 (shell, the 9th on top)
+
+def rhodes(note, length):
+    """an electric piano: a sine struck by a decaying FM ping (the tine), warm, a slow tremolo"""
+    def make():
+        n = nlen(length + 0.9); t = tsec(n)
+        f = hz(note)
+        index = 1.4 * np.exp(-t / 0.18) + 0.25
+        x = np.sin(2 * np.pi * f * t + index * np.sin(2 * np.pi * f * t))
+        x += 0.12 * np.sin(2 * np.pi * f * 7.0 * t) * np.exp(-t / 0.03)          # the tine's tick
+        e = np.minimum(1.0, t / 0.004) * np.exp(-t / 1.6)
+        off = t > length; e[off] *= np.exp(-(t[off] - length) / 0.25)
+        x *= e * (1 + 0.12 * np.sin(2 * np.pi * 4.5 * t))
+        return fade_tail(fft_filter(x, hi=4000) * 0.32)
+    return cached(('rhodes', note, round(length, 3)), make)
+
+def vibe(note, length=1.4):
+    """a vibraphone: two pure partials, a soft mallet, a wobble"""
+    def make():
+        n = nlen(length); t = tsec(n)
+        f = hz(note)
+        x = (np.sin(2 * np.pi * f * t) + 0.25 * np.sin(2 * np.pi * f * 4.0 * t) * np.exp(-t / 0.15)) * np.exp(-t / 0.7)
+        x *= np.minimum(1.0, t / 0.002) * (1 + 0.25 * np.sin(2 * np.pi * 5.5 * t))
+        return fade_tail(x * 0.3)
+    return cached(('vibe', note, length), make)
+
+def upright(note, length):
+    """a round bass: a sine and a little of its octave, a soft pluck"""
+    def make():
+        n = nlen(length + 0.1); t = tsec(n)
+        f = hz(note)
+        x = np.sin(2 * np.pi * f * t) + 0.3 * np.sin(2 * np.pi * 2 * f * t) * np.exp(-t / 0.2)
+        e = np.minimum(1.0, t / 0.01) * np.exp(-t / 1.2)
+        off = t > length; e[off] *= np.exp(-(t[off] - length) / 0.05)
+        return fade_tail(x * e * 0.5)
+    return cached(('upright', note, round(length, 3)), make)
+
+def rim():
+    def make():
+        n = nlen(0.12); t = tsec(n)
+        x = sine(1700, n) * np.exp(-t / 0.008) * 0.5 + fft_filter(rng.standard_normal(n), lo=2500, hi=7000) * np.exp(-t / 0.015) * 0.4
+        return fade_tail(norm(x, 0.4))
+    return cached('rim', make)
+
+def lounge():
+    """relaxed: half time, a swing, jazz chords in D major on an electric piano, a vibraphone now and then"""
+    bars = 16; tail = 3.5
+    s = Song(T(bars) + tail)
+    swing = 0.3                                     # the off sixteenths a little late
+    def at(b, st): return T(b, st + (swing if st % 2 else 0))
+    for b in range(bars):
+        ch, root = LOUNGE[b % 4]
+        # the piano: the chord on one, again short on the 'and' of two, a little touch before four
+        for st, ln in ((0, 5 * STEP), (7, 2 * STEP), (13, 2.5 * STEP)):
+            for k, nt in enumerate(ch):
+                s.add(rhodes(nt, ln), at(b, st) + 0.008 * k, verb=0.35, gain=0.55 if st == 0 else 0.38)
+        # the bass: the root, its fifth, a step to the next
+        nxt = LOUNGE[(b + 1) % 4][1]
+        fifth = note_from(hz(root) * 1.5)
+        s.add(upright(root, 6 * STEP), at(b, 0), gain=0.8)
+        s.add(upright(fifth, 3 * STEP), at(b, 8), gain=0.6)
+        s.add(upright(note_from(hz(nxt) * 2 ** (-1 / 12)), 2 * STEP), at(b, 14), gain=0.5)
+        # the drums, soft: a kick on one and on the 'and' of three, a rim click on three, a shaker
+        if b >= 1:
+            s.kick(at(b, 0), 0.35)
+            s.kick(at(b, 10), 0.22)
+            s.add(rim(), at(b, 8), 'drums', verb=0.3, gain=0.5)
+            for st in range(16):
+                s.add(hat(), at(b, st), 'drums', gain=0.09 if st % 2 else 0.14)
+        s.add(dark_pad([nt for nt in ch], BAR, 900, attack=0.8, release=1.2), T(b), verb=0.4, gain=0.25)
+    # the vibraphone: a few notes over the second half, answering the piano
+    tune = [(4, 2, 'A5'), (4, 6, 'F#5'), (5, 2, 'E5'), (6, 0, 'D5'), (6, 6, 'E5'), (7, 4, 'C#5'),
+            (8, 2, 'A5'), (8, 6, 'B5'), (9, 2, 'G#5'), (10, 0, 'F#5'), (10, 10, 'D5'), (11, 4, 'E5'),
+            (12, 2, 'D6'), (12, 6, 'B5'), (13, 2, 'A5'), (14, 0, 'F#5'), (14, 6, 'G5'), (15, 4, 'E5')]
+    for b, st, nt in tune:
+        s.add(vibe(nt), at(b, st), verb=0.5, dly=0.35, gain=0.55)
+    return s.mix(pump=0.0), T(bars)
+
 def victory():
     """a boss down: the dark tune lifts - B flat, C, and up into D major, the brass climbing, held, shining"""
     s = Song(T(1) + 3.2)
@@ -664,7 +749,7 @@ def victory():
 # loudness: the loops by their loudest two seconds, the short pieces as well (they were set by their peak and came out quiet)
 PIECES = {'attract': (attract, 0.23), 'hiscore': (hiscore, 0.2), 'start': (start, 0.26),
           'levelin': (levelin, 0.24), 'approach': (approach, 0.24), 'tunnel': (tunnel, 0.25), 'boss': (boss, 0.25),
-          'victory': (victory, 0.26)}
+          'victory': (victory, 0.26), 'lounge': (lounge, 0.15)}
 
 def finish(x, loop, rms):
     if loop:

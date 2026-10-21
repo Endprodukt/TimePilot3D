@@ -18,6 +18,9 @@ normalized). Files that are missing are made in code, as before.
   burner.wav       the afterburner lights (a thump)
   fall.wav         a plane shot down goes into its dive (the howl before it hits)
   ring.wav         a ring of the time tunnel passed (played higher through its middle)
+  scream.wav       a parachutist shot (scream_2.wav to scream_6.wav: more takes, one at
+                   random). The ones here are the Wilhelm screams of the Star Wars
+                   Ultimate Sound Effects Collection (freely available)
   warn.wav         warning beep (missile, salvo, laser lock)
   stall.wav        stall warning beep
   boss.wav         the boss arrives (alarm)

@@ -17,6 +17,7 @@
 
 #include "game_internal.h"
 #include "vpbind.h"
+#include "setup.h"
 
 struct game_state G;
 
@@ -31,6 +32,10 @@ static void load_player(int who);
 static int plane_lost(int level);
 static void start_game(int players);
 static void respawn(void);
+static void set_view(int view);
+static void fly_on(void);
+static int next_player_or_over(void);
+static void update_continue(vp_input *in);
 static unsigned selftest_fingerprint(void);
 static void selftest_report(void);
 static void update_playing(vp_input *in);
@@ -52,6 +57,8 @@ static void settings_from_service(const service_settings *v);
 static int save_settings(void);
 static void open_service(void);
 static void update_service(vp_input *in, int hotkey);
+static void open_setup(void);
+static void update_setup(vp_input *in);
 static void default_scores(void);
 
 /* eras: see struct era in game_internal.h. */
@@ -274,10 +281,30 @@ static void load_player(int who)
 
 static int plane_lost(int level)
 {
-    int other = 1 - G.cur;
-
     if (--G.lives < 0) { G.lives = 0; G.pl[G.cur].out = 1; }
     save_player(level);
+    if (G.pl[G.cur].out && G.continues && !G.demo && !G.selftest) {
+        /* the last plane: everything stands still while the player is
+         * asked whether to fly on (update_continue) */
+        G.cont_time = CONTINUE_TIME;
+        G.cont_level = level;
+        G.cont_tunnel = G.state == WARP;
+        sound_engine(-1);
+        sound_sources_begin();          /* nothing else that flies is heard while it waits */
+        sound_sources_end();
+        return 1;
+    }
+    return next_player_or_over();
+}
+
+/* After a lost plane: with two players the turn passes to the other one,
+ * if it still has planes; the game is over when nobody has any. Gives back
+ * 1 if somebody else flies now or the game is over, 0 if the same player
+ * flies on. */
+
+static int next_player_or_over(void)
+{
+    int other = 1 - G.cur;
     if (G.players == 2 && !G.pl[other].out) {
         load_player(other);
         start_level(G.pl[other].level, 1);
@@ -286,6 +313,40 @@ static int plane_lost(int level)
     }
     if (G.pl[G.cur].out) { enter(GAME_OVER); return 1; }
     return 0;
+}
+
+/* Waiting for a continue. Nothing moves; the seconds run down, faster
+ * with every press of a button that is not START (each takes a second
+ * off). START (with a credit, as a game takes one) flies on where the
+ * plane was lost, with the planes a game begins with and the score from
+ * nothing. Run out, and the plane is lost as it would have been. */
+
+static void update_continue(vp_input *in)
+{
+    char name[32];
+    if (vp_credits_update(&G.credits, in)) sound_fx(FX_COIN);
+    if (vp_input_pressed(in, "start1") && (G.credits.free_play || vp_credits_take(&G.credits, 1))) {
+        G.cont_time = 0;
+        if (G.score > G.pl[G.cur].best) G.pl[G.cur].best = G.score;     /* still counts at the end, if nothing better comes */
+        G.score = 0;
+        G.lives = G.start_lives - 1;
+        G.next_extra = G.bonus_plane;
+        G.pl[G.cur].out = 0;
+        save_player(G.cont_level);
+        sound_fx(FX_START);
+        if (G.cont_tunnel) start_level(G.cont_level, 1);
+        else fly_on();
+        return;
+    }
+    if (controls_pressed(in, G.btn_fire) || controls_pressed(in, G.btn_faster) || controls_pressed(in, G.btn_slower)
+        || controls_pressed(in, G.btn_rear) || controls_captured(name, sizeof name)) {
+        G.cont_time = ceilf(G.cont_time) - 1.0f;
+        sound_fx(FX_TINK);
+    }
+    G.cont_time -= DT;
+    if (G.cont_time > 0) return;
+    G.cont_time = 0;
+    next_player_or_over();
 }
 
 static void start_game(int players)
@@ -298,16 +359,19 @@ static void start_game(int players)
         G.pl[i].next_extra = G.bonus_plane;
         G.pl[i].level = G.start_level;
         G.pl[i].kills = 0;
+        G.pl[i].best = 0;
         G.pl[i].out = i >= players;
     }
     load_player(0);
     G.demo = 0;
     G.rank = -1;
-    G.chase = G.chase_ini;
+    set_view(G.view_ini);
     sound_mute(0);
     G.muted = 0;
     if (!sound_music_sting(MUSIC_START)) sound_fx(FX_START);
-    start_level(G.start_level, 1);
+    /* How to play, once, before the first era (not for the self test) */
+    if (G.selftest) start_level(G.start_level, 1);
+    else { sound_engine(-1); enter(TUTORIAL); }     /* (a START in the demo leaves its engine running) */
 }
 
 void start_warp(void)
@@ -368,12 +432,19 @@ void start_warp(void)
 
 static void respawn(void)
 {
-    float low;
-    int i;
-
     if (G.selftest) { /* planes that never run out */ }
     else if (G.demo) { enter_attract(PAGE_CAST); return; }
     else if (plane_lost(G.level)) return;
+    fly_on();
+}
+
+/* The next plane, where the last was lost: nothing near it, high enough. */
+
+static void fly_on(void)
+{
+    float low;
+    int i;
+
     for (i = 0; i < MAX_OBJ; i++) {
         obj *o = &G.objs[i];
         if ((o->kind == K_ENEMY || o->kind == K_BOSS) && dist3(o->pos, G.p.pos) < 350.0f) {
@@ -524,6 +595,12 @@ static void debug_select(vp_input *in)
 }
 #endif
 
+static void set_view(int view)
+{
+    G.chase = view == VIEW_CHASE;
+    G.hud_only = view == VIEW_HUD;
+}
+
 static void start_demo(void)
 {
     G.demo = 1;
@@ -532,7 +609,7 @@ static void start_demo(void)
     G.cur = 0;
     G.score = 0;
     G.lives = 2;
-    G.chase = (G.demo_era & 1);             /* the cockpit one time, from behind the next */
+    set_view(G.demo_era & 1 ? VIEW_CHASE : VIEW_COCKPIT);     /* the cockpit one time, from behind the next */
     start_level(G.demo_era % ERA_COUNT, 1);
     G.demo_era++;
 }
@@ -556,7 +633,12 @@ static void update_initials(vp_input *in)
         G.initial_repeat = 0;
     }
     G.initials[G.initial_pos] = letters[G.initial_letter];
-    if (vpb_menu_confirm(in)) { sound_fx(FX_PICKUP); G.initial_pos++; G.state_time = 0; }   /* START 1, Enter */
+    /* START 1, Enter, and fire (not the press still held from the fight: it must be new, and not at once) */
+    if (vpb_menu_confirm(in) || (G.state_time > 0.3f && controls_pressed(in, G.btn_fire))) {
+        sound_fx(FX_PICKUP);
+        G.initial_pos++;
+        G.state_time = 0;
+    }
     if (G.initial_pos < 3 && G.state_time < INITIALS_TIMEOUT) return;
     G.initials[3] = 0;
     G.rank = vp_hiscore_insert(G.initials, G.score);
@@ -567,6 +649,7 @@ static void update_initials(vp_input *in)
 static void step(vp_input *in)
 {
     G.frames++;
+    if (G.cont_time > 0) { update_continue(in); return; }
     G.state_time += DT;
     G.level_time += DT;
     G.selftest_level_frames++;
@@ -586,6 +669,7 @@ static void step(vp_input *in)
         else if (G.state == INITIALS) m = MUSIC_HISCORE;
         else if (G.state == LEVELIN) m = MUSIC_LEVELIN;
         else if (G.state == BOSSINTRO) m = MUSIC_BOSS;
+        else if (G.state == TUTORIAL) m = MUSIC_LOUNGE;
         else if (G.state == WARP) m = G.state_time < TUNNEL_APPROACH ? MUSIC_APPROACH : MUSIC_TUNNEL;
         sound_music(m);
     }
@@ -605,7 +689,15 @@ static void step(vp_input *in)
         if (G.page == PAGE_TITLE && G.state_time >= TITLE_TIME) { G.page = PAGE_HOWTO; G.state_time = 0; }
         else if (G.page == PAGE_HOWTO && G.state_time >= HOWTO_TIME) { G.page = PAGE_SCORES; G.state_time = 0; }
         else if (G.page == PAGE_SCORES && G.state_time >= SCORES_TIME) start_demo();
-        else if (G.page == PAGE_CAST && G.state_time >= CAST_TIME) { G.page = PAGE_TITLE; G.state_time = 0; G.rank = -1; }
+        else if (G.page == PAGE_CAST && G.state_time >= CAST_TIME) { G.page = PAGE_ITEMS; G.state_time = 0; }
+        else if (G.page == PAGE_ITEMS && G.state_time >= ITEMS_TIME) { G.page = PAGE_TITLE; G.state_time = 0; G.rank = -1; }
+        if (G.page == PAGE_HOWTO) howto_sounds(G.state_time);
+        break;
+    case TUTORIAL:
+        /* how to play and the items, through to the end or until START */
+        if (G.state_time < HOWTO_TIME) howto_sounds(G.state_time);
+        if (G.state_time >= TUTORIAL_TIME || (G.state_time > 0.5f && vp_input_pressed(in, "start1")))
+            start_level(G.start_level, 1);
         break;
     case INITIALS:
         update_initials(in);
@@ -704,10 +796,11 @@ static void step(vp_input *in)
         break;
     }
     /* START changes the view while a game is flown (a coin's START was
-     * taken above, and ends this step). */
+     * taken above, and ends this step): the display alone, the cockpit,
+     * from behind, and round again. */
     if (!G.demo && !G.selftest && (G.state == PLAYING || G.state == INTRO) && G.state_time > 0.2f
         && vp_input_pressed(in, "start1"))
-        G.chase = !G.chase;
+        set_view(G.chase ? VIEW_HUD : G.hud_only ? VIEW_COCKPIT : VIEW_CHASE);
 
     hear_the_sky();
 
@@ -725,6 +818,7 @@ static void step(vp_input *in)
 static void enter_attract(int page)
 {
     G.demo = 0;
+    G.cont_time = 0;
     G.page = page;
     G.table_count = vp_hiscore_load(G.table);
     if (G.table_count > 0 && G.table[0].score > G.hiscore) G.hiscore = G.table[0].score;
@@ -741,6 +835,7 @@ static void end_game(void)
 {
     for (; G.over_player < G.players && !G.demo && !G.selftest; G.over_player++) {
         G.score = G.pl[G.over_player].score;
+        if (G.pl[G.over_player].best > G.score) G.score = G.pl[G.over_player].best;     /* a score from before a continue */
         if (vp_hiscore_rank(G.score) < 0) continue;
         memcpy(G.initials, "A  ", 4);
         G.initial_pos = G.initial_letter = 0;
@@ -774,7 +869,7 @@ static void read_settings(const char *path)
 {
     char line[512], key[64], value[128];
     FILE *f = fopen(path, "r");
-    int i;
+    int i, no_frame = 0;
 
     if (!f) return;
     while (fgets(line, sizeof line, f)) {
@@ -782,13 +877,16 @@ static void read_settings(const char *path)
         if (!strcmp(key, "yoke_sensitivity"))    G.yoke_sens = clampf((float)atof(value), 0.25f, 3.0f);
         else if (!strcmp(key, "yoke_deadzone"))  G.yoke_deadzone = atoi(value);
         else if (!strcmp(key, "invert_pitch"))   G.invert_pitch = yes(value);
-        else if (!strcmp(key, "cockpit_frame"))  G.cockpit_frame = yes(value);
+        else if (!strcmp(key, "cockpit_frame"))  no_frame = !yes(value);      /* before 0.55.0: the cockpit's lines off */
         else if (!strcmp(key, "occlusion"))      G.occlusion = yes(value);
         else if (!strcmp(key, "level_select"))   G.level_select = yes(value);
+        else if (!strcmp(key, "invincible"))     G.invincible = yes(value);
+        else if (!strcmp(key, "continue"))       G.continues = yes(value);
+        else if (!strcmp(key, "setup_done"))     G.setup_done = yes(value);
         else if (!strcmp(key, "version"))        snprintf(G.version, sizeof G.version, "V%.14s", value);
         else if (!strcmp(key, "picture_size"))   G.picture_size = atoi(value);
         else if (!strcmp(key, "beam_limit"))     G.beam_limit = atoi(value);
-        else if (!strcmp(key, "view"))           G.chase_ini = value[0] == 'c' && value[1] == 'h';
+        else if (!strcmp(key, "view"))           G.view_ini = value[0] == 'c' && value[1] == 'h' ? VIEW_CHASE : value[0] == 'h' ? VIEW_HUD : VIEW_COCKPIT;
         else if (!strcmp(key, "aim_assist"))     G.aim_assist = atoi(value);
         else if (!strcmp(key, "lives"))          G.start_lives = atoi(value);
         else if (!strcmp(key, "bonus_plane"))    G.bonus_plane = atoi(value);
@@ -804,6 +902,7 @@ static void read_settings(const char *path)
         else if (!strcmp(key, "faster_button"))  snprintf(G.btn_faster, sizeof G.btn_faster, "%s", value);
         else if (!strcmp(key, "slower_button"))  snprintf(G.btn_slower, sizeof G.btn_slower, "%s", value);
         else if (!strcmp(key, "rear_button"))    snprintf(G.btn_rear, sizeof G.btn_rear, "%s", value);
+        else if (!strcmp(key, "menu_button"))    snprintf(G.menu_key, sizeof G.menu_key, "%s", value);
         else if (!strcmp(key, "control"))        G.control_stick = value[0] == 'j' || value[0] == 's';
         else if (!strcmp(key, "yoke_layout"))    sscanf(value, "%d %d %d %d", &G.yoke_layout[0], &G.yoke_layout[1], &G.yoke_layout[2], &G.yoke_layout[3]);
         else if (!strcmp(key, "difficulty")) {
@@ -814,6 +913,7 @@ static void read_settings(const char *path)
             if (!strcmp(key, bright_key[i])) G.bright[i] = (float)atof(value) / 100.0f;
     }
     fclose(f);
+    if (no_frame && G.view_ini == VIEW_COCKPIT) G.view_ini = VIEW_HUD;
     G.yoke_deadzone = (int)clampf((float)G.yoke_deadzone, 0, 50);
     G.aim_assist = (int)clampf((float)G.aim_assist, 0, 100);
     G.picture_size = (int)clampf((float)G.picture_size, 60, 100);
@@ -837,9 +937,10 @@ static void load_settings(void)
     G.yoke_sens = 1.0f;
     G.yoke_deadzone = 12;
     G.aim_assist = 40;
-    G.cockpit_frame = 1;
     G.occlusion = 1;
     G.level_select = 1;
+    G.view_ini = VIEW_HUD;                  /* the display alone, unless game.ini or the service menu say otherwise */
+    G.continues = 1;
     G.picture_size = 100;
     G.beam_limit = 250;
     G.start_lives = 3;
@@ -855,6 +956,7 @@ static void load_settings(void)
     strcpy(G.btn_faster, "key_Left_Alt+joy1_button2");
     strcpy(G.btn_slower, "key_Space+joy1_button3");
     strcpy(G.btn_rear, "key_Left_Shift+joy1_button4");
+    strcpy(G.menu_key, "key_F2");
     for (i = 0; i < 4; i++) G.yoke_layout[i] = i + 1;
     read_settings(vp_asset_path("game.ini", path, sizeof path));
     read_settings(settings_path(path, sizeof path));
@@ -862,7 +964,9 @@ static void load_settings(void)
     vpb_normalize(G.btn_faster, sizeof G.btn_faster);
     vpb_normalize(G.btn_slower, sizeof G.btn_slower);
     vpb_normalize(G.btn_rear, sizeof G.btn_rear);
-    G.chase = G.chase_ini;
+    vpb_normalize(G.menu_key, sizeof G.menu_key);
+    service_menu_key(G.menu_key);
+    set_view(G.view_ini);
 }
 
 static void settings_to_service(service_settings *v)
@@ -877,12 +981,13 @@ static void settings_to_service(service_settings *v)
     v->yoke_sensitivity = G.yoke_sens;
     v->yoke_deadzone    = G.yoke_deadzone;
     v->invert_pitch     = G.invert_pitch;
-    v->cockpit_frame    = G.cockpit_frame;
     v->occlusion        = G.occlusion;
     v->level_select     = G.level_select;
+    v->invincible       = G.invincible;
+    v->continues        = G.continues;
     v->picture_size     = G.picture_size;
     v->beam_limit       = G.beam_limit;
-    v->view_chase       = G.chase_ini;
+    v->view             = G.view_ini;
     v->aim_assist       = G.aim_assist;
     v->volume           = (int)(G.volume * 100.0f + 0.5f);
     v->effects_volume   = (int)(G.effects_volume * 100.0f + 0.5f);
@@ -895,6 +1000,7 @@ static void settings_to_service(service_settings *v)
     snprintf(v->button[SERVICE_FASTER], sizeof v->button[0], "%s", G.btn_faster);
     snprintf(v->button[SERVICE_SLOWER], sizeof v->button[0], "%s", G.btn_slower);
     snprintf(v->button[SERVICE_REAR], sizeof v->button[0], "%s", G.btn_rear);
+    snprintf(v->menu_key, sizeof v->menu_key, "%s", G.menu_key);
     for (i = 0; i < 4; i++) v->yoke_layout[i] = G.yoke_layout[i];
     v->control_stick = G.control_stick;
 }
@@ -914,13 +1020,14 @@ static void settings_from_service(const service_settings *v)
     G.yoke_sens      = v->yoke_sensitivity;
     G.yoke_deadzone  = v->yoke_deadzone;
     G.invert_pitch   = v->invert_pitch;
-    G.cockpit_frame  = v->cockpit_frame;
     G.occlusion      = v->occlusion;
     G.level_select   = v->level_select;
+    G.invincible     = v->invincible;
+    G.continues      = v->continues;
     G.picture_size   = v->picture_size;
     G.beam_limit     = v->beam_limit;
     world_set_load_limit((float)G.beam_limit * 1000.0f);
-    G.chase_ini      = v->view_chase;
+    G.view_ini       = v->view;
     G.aim_assist     = v->aim_assist;
     G.volume         = (float)v->volume / 100.0f;
     G.effects_volume = (float)v->effects_volume / 100.0f;
@@ -934,6 +1041,8 @@ static void settings_from_service(const service_settings *v)
     snprintf(G.btn_faster, sizeof G.btn_faster, "%s", v->button[SERVICE_FASTER]);
     snprintf(G.btn_slower, sizeof G.btn_slower, "%s", v->button[SERVICE_SLOWER]);
     snprintf(G.btn_rear, sizeof G.btn_rear, "%s", v->button[SERVICE_REAR]);
+    snprintf(G.menu_key, sizeof G.menu_key, "%s", v->menu_key);
+    service_menu_key(G.menu_key);
     for (i = 0; i < 4; i++) G.yoke_layout[i] = v->yoke_layout[i];
     G.control_stick = v->control_stick;
     controls_use_yoke(!G.control_stick);        /* after the line above: the yoke is read by what was chosen now */
@@ -966,17 +1075,20 @@ static int save_settings(void)
     fprintf(f, "yoke_sensitivity = %.2f\n", (double)G.yoke_sens);
     fprintf(f, "yoke_deadzone = %d\n", G.yoke_deadzone);
     fprintf(f, "invert_pitch = %s\n", G.invert_pitch ? "yes" : "no");
-    fprintf(f, "cockpit_frame = %s\n", G.cockpit_frame ? "yes" : "no");
     fprintf(f, "occlusion = %s\n", G.occlusion ? "yes" : "no");
     fprintf(f, "level_select = %s\n", G.level_select ? "yes" : "no");
+    fprintf(f, "invincible = %s\n", G.invincible ? "yes" : "no");
+    fprintf(f, "continue = %s\n", G.continues ? "yes" : "no");
+    fprintf(f, "setup_done = %s\n", G.setup_done ? "yes" : "no");
     fprintf(f, "picture_size = %d\n", G.picture_size);
     fprintf(f, "beam_limit = %d\n", G.beam_limit);
-    fprintf(f, "view = %s\n", G.chase_ini ? "chase" : "cockpit");
+    fprintf(f, "view = %s\n", G.view_ini == VIEW_CHASE ? "chase" : G.view_ini == VIEW_HUD ? "hud" : "cockpit");
     fprintf(f, "aim_assist = %d\n", G.aim_assist);
     fprintf(f, "fire_button = %s\n", G.btn_fire);
     fprintf(f, "faster_button = %s\n", G.btn_faster);
     fprintf(f, "slower_button = %s\n", G.btn_slower);
     fprintf(f, "rear_button = %s\n", G.btn_rear);
+    fprintf(f, "menu_button = %s\n", G.menu_key);
     fprintf(f, "control = %s\n", G.control_stick ? "joystick" : "yoke");
     fprintf(f, "yoke_layout = %d %d %d %d\n", G.yoke_layout[0], G.yoke_layout[1], G.yoke_layout[2], G.yoke_layout[3]);
     fprintf(f, "volume = %d\n", (int)(G.volume * 100.0f + 0.5f));
@@ -1008,6 +1120,7 @@ static void update_service(vp_input *in, int hotkey)
 
     if (result == SERVICE_OPEN) return;
     G.service = 0;
+    if (result == SERVICE_SETUP) { open_setup(); return; }       /* CONTROL SETUP: what the menu had is not kept */
     notice("SETTINGS NOT SAVED");
     if (result == SERVICE_SAVED) {
         settings_from_service(service_get());
@@ -1018,6 +1131,34 @@ static void update_service(vp_input *in, int hotkey)
     /* Out of the service menu the game always begins again, from its
      * title: whatever was being played is over, and every setting counts
      * from a clean start. */
+    enter_attract(PAGE_TITLE);
+}
+
+/* The first start (setup.h): until it has been gone through once, the
+ * game begins there, not on its title. Its music is the lounge piece of how
+ * to play; it is heard even with the attract's sound off, as the menu is. */
+
+static void open_setup(void)
+{
+    service_settings now;
+    settings_to_service(&now);
+    setup_open(&now);
+    G.setup = 1;
+    sound_engine(-1);
+    sound_sources_begin();
+    sound_sources_end();
+}
+
+static void update_setup(vp_input *in)
+{
+    if (G.muted) { G.muted = 0; sound_mute(0); }
+    sound_music(MUSIC_LOUNGE);
+    if (setup_update(in) == SERVICE_OPEN) return;
+    G.setup = 0;
+    settings_from_service(setup_get());
+    G.setup_done = 1;
+    notice(save_settings() ? "SETTINGS SAVED" : "CANNOT SAVE SETTINGS");
+    sound_volumes(G.volume, G.effects_volume, G.engine_volume, G.music_volume);
     enter_attract(PAGE_TITLE);
 }
 
@@ -1047,6 +1188,7 @@ void game_init(int vertical)
     default_scores();
     G.rank = -1;
     enter_attract(PAGE_TITLE);
+    if (!G.setup_done) open_setup();
 }
 
 void game_start_level(int level)
@@ -1073,6 +1215,7 @@ void game_cheat_weak(void) { G.cheat_weak = 1; }
 void game_cheat_debugsel(int row)
 {
 #if DEBUG_LEVEL_SELECT
+    G.setup = 0;
     G.debug_players = 1;
     G.debug_sel = row;
     enter(DEBUGSEL);
@@ -1081,12 +1224,28 @@ void game_cheat_debugsel(int row)
 #endif
 }
 
-void game_cheat_service(void) { open_service(); service_show_monitor(); }
+void game_cheat_service(void) { G.setup = 0; open_service(); service_show_monitor(); }
+
+void game_cheat_setup(int page) { open_setup(); setup_cheat_page(page); }
+
+void game_cheat_continue(void)
+{
+    G.setup = 0;
+    G.continues = 1;
+    start_game(1);
+    start_level(G.start_level, 1);
+    enter(DYING);
+    G.p.alive = 0;
+    G.lives = 0;
+    plane_lost(G.level);
+}
 
 void game_cheat_items(void) { G.cheat_items = 1; }
 
 void game_selftest(int steps, int levels)
 {
+    G.setup = 0;                        /* never stops at the first start's questions */
+    G.invincible = 0;                   /* and is the game as it is */
     G.selftest = steps > 0 ? steps : 1;
     G.selftest_levels = levels > 0 ? levels : 5;
     G.credits.free_play = 1;
@@ -1095,8 +1254,13 @@ void game_selftest(int steps, int levels)
 
 void game_attract_page(int page)
 {
+    G.setup = 0;
     if (page == 3) { enter_attract(PAGE_SCORES); G.state_time = SCORES_TIME; }  /* straight on to the demo */
-    else enter_attract(page == 1 ? PAGE_SCORES : page == 2 ? PAGE_CAST : page == 4 ? PAGE_HOWTO : PAGE_TITLE);
+    else if (page == 6) {                       /* the tutorial after START: its items */
+        start_game(1);
+        G.state_time = HOWTO_TIME;
+    }
+    else enter_attract(page == 1 ? PAGE_SCORES : page == 2 ? PAGE_CAST : page == 4 ? PAGE_HOWTO : page == 5 ? PAGE_ITEMS : PAGE_TITLE);
 }
 
 void game_update(vp_game *g, float dt)
@@ -1121,7 +1285,8 @@ void game_update(vp_game *g, float dt)
     {
         int hotkey = service_hotkey();
         if (G.service) { update_service(in, hotkey); return; }
-        if (hotkey) { open_service(); return; }
+        if (hotkey) { G.setup = 0; open_service(); return; }    /* out of the setup too: it comes again at the next start */
+        if (G.setup) { update_setup(in); return; }
     }
     step(in);
 }

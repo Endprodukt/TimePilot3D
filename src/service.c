@@ -21,9 +21,9 @@
 
 enum {
     R_VOLUME, R_EFFECTS, R_ENGINE, R_MUSIC,
-    R_LIVES, R_DIFFICULTY, R_BONUS, R_KILLS, R_START, R_FREE, R_ATTRACT, R_RESET, R_LEVELSEL,
-    R_SENS, R_DEADZONE, R_INVERT, R_VIEW, R_AIM, R_FIRE, R_FASTER, R_SLOWER, R_REAR,
-    R_FRAME, R_SOLID, R_PICTURE, R_BEAM, R_MONITOR, R_LAYOUT, R_CONTROL, R_SAVE, R_CANCEL, R_GAME, R_CONTROLS, R_VIDEO, R_BACK,
+    R_LIVES, R_DIFFICULTY, R_BONUS, R_KILLS, R_START, R_FREE, R_ATTRACT, R_RESET, R_LEVELSEL, R_INVINCIBLE, R_CONTINUE,
+    R_SENS, R_DEADZONE, R_INVERT, R_VIEW, R_AIM, R_FIRE, R_FASTER, R_SLOWER, R_REAR, R_MENUKEY, R_SETUP,
+    R_SOLID, R_PICTURE, R_BEAM, R_MONITOR, R_LAYOUT, R_CONTROL, R_SAVE, R_CANCEL, R_GAME, R_CONTROLS, R_VIDEO, R_BACK,
     R_BRIGHT, R_BRIGHT_LAST = R_BRIGHT + SERVICE_BRIGHTS - 1, ROWS
 };
 
@@ -37,14 +37,14 @@ static const int game_rows[] = {
 #if DEBUG_LEVEL_SELECT
     R_LEVELSEL,
 #endif
-    R_BACK
+    R_CONTINUE, R_INVINCIBLE, R_BACK
 };
 static const int control_rows[] = {
-    R_CONTROL, R_SENS, R_DEADZONE, R_INVERT, R_VIEW, R_AIM, R_FIRE, R_FASTER, R_SLOWER, R_REAR, R_LAYOUT, R_BACK
+    R_CONTROL, R_SENS, R_DEADZONE, R_INVERT, R_VIEW, R_AIM, R_FIRE, R_FASTER, R_SLOWER, R_REAR, R_LAYOUT, R_MENUKEY, R_SETUP, R_BACK
 };
 static const int video_rows[] = {
     R_BRIGHT, R_BRIGHT + 1, R_BRIGHT + 2, R_BRIGHT + 3, R_BRIGHT + 4, R_BRIGHT + 5,
-    R_BRIGHT + 6, R_BRIGHT + 7, R_FRAME, R_SOLID, R_BACK
+    R_BRIGHT + 6, R_BRIGHT + 7, R_SOLID, R_BACK
 };
 #define COUNT(a) ((int)(sizeof(a) / sizeof((a)[0])))
 
@@ -57,15 +57,16 @@ static const int video_rows[] = {
 static const char *const row_names[ROWS] = {
     "MASTER VOLUME", "EFFECTS VOLUME", "ENGINE VOLUME", "MUSIC VOLUME",
     "PLANES PER GAME", "DIFFICULTY", "FIRST BONUS PLANE", "ENEMIES PER ERA", "START IN ERA", "FREE PLAY", "ATTRACT SOUND",
-    "RESET HIGH SCORES", "LEVEL SELECT",
+    "RESET HIGH SCORES", "LEVEL SELECT", "INVINCIBLE", "CONTINUE",
     "YOKE SENSITIVITY", "YOKE DEAD ZONE", "INVERT PITCH", "VIEW AT START", "AIM ASSIST",
-    "FIRE BUTTON", "FASTER BUTTON", "SLOWER BUTTON", "LOOK BACK BUTTON",
-    "COCKPIT FRAME", "SOLID OBJECTS", "PICTURE SIZE", "BEAM LIMIT", "MONITOR", "WHERE THE BUTTONS ARE", "FLOWN WITH", "SAVE", "CANCEL", "GAME", "CONTROLS", "VIDEO", "BACK",
+    "FIRE BUTTON", "FASTER BUTTON", "SLOWER BUTTON", "LOOK BACK BUTTON", "MENU BUTTON", "CONTROL SETUP",
+    "SOLID OBJECTS", "PICTURE SIZE", "BEAM LIMIT", "MONITOR", "WHERE THE BUTTONS ARE", "FLOWN WITH", "SAVE", "CANCEL", "GAME", "CONTROLS", "VIDEO", "BACK",
     "GROUND, BUILDINGS", "CLOUD BRIGHTNESS", "ENEMY BRIGHTNESS", "PLANE, COCKPIT",
     "SHOT BRIGHTNESS", "EFFECT BRIGHTNESS", "TEXT BRIGHTNESS", "TITLE BRIGHTNESS"
 };
 
 static const char *const difficulty_names[DIFFICULTY_COUNT] = { "EASY", "NORMAL", "HARD", "ACE" };
+static const char *const view_names[VIEW_COUNT] = { "HUD ONLY", "COCKPIT", "CHASE" };
 
 static struct {
     service_settings now;
@@ -93,14 +94,22 @@ static const int *page_rows(int *count)
     return main_rows;
 }
 
+/* What opens the menu: F2 (the cabinet's key for every game's menu, never
+ * laid out - vpbind.c) always, so that nobody is locked out, and whatever
+ * MENU BUTTON has besides. */
+static char s_menu_key[128] = "key_F2";
+
+void service_menu_key(const char *controls)
+{
+    snprintf(s_menu_key, sizeof s_menu_key, "%s", controls && controls[0] ? controls : "key_F2");
+}
+
 int service_hotkey(void)
 {
-    static int reserved;
     int tab, hit;
 
-    if (!reserved) { vpb_reserve_key(SDL_SCANCODE_TAB); reserved = 1; }    /* the menu's key is never laid out */
     vpb_update();
-    tab = vpb_key_held(SDL_SCANCODE_TAB);
+    tab = vpb_key_held(SDL_SCANCODE_F2) || vpb_held(s_menu_key);
     hit = tab && !S.tab;
 
     S.tab = tab;
@@ -116,6 +125,7 @@ void service_open(const service_settings *now)
     S.now = *now;
     S.now.reset_scores = 0;
     for (i = 0; i < SERVICE_BUTTONS; i++) vpb_normalize(S.now.button[i], sizeof S.now.button[i]);
+    if (!S.now.menu_key[0]) snprintf(S.now.menu_key, sizeof S.now.menu_key, "key_F2");
     S.sens = (int)(now->yoke_sensitivity * 100.0f + 0.5f);
     if (S.sens < SENS_MIN) S.sens = SENS_MIN;
     if (S.sens > SENS_MAX) S.sens = SENS_MAX;
@@ -149,6 +159,7 @@ static int *row_number(int row, int *lo, int *hi, int *step)
     case R_MUSIC:      return &S.now.music_volume;
     case R_LIVES:      *lo = 1; *hi = 9; return &S.now.lives;
     case R_DIFFICULTY: *hi = DIFFICULTY_COUNT - 1; return &S.now.difficulty;
+    case R_VIEW:       *hi = VIEW_COUNT - 1; return &S.now.view;
     case R_BONUS:      *lo = 5000; *hi = 100000; *step = 5000; return &S.now.bonus_plane;
     case R_KILLS:      *lo = 8; *hi = 96; *step = 8; return &S.now.kills_per_era;
     case R_START:      *hi = 4; return &S.now.start_era;
@@ -165,33 +176,44 @@ static int *row_switch(int row)
     case R_ATTRACT: return &S.now.attract_sound;
     case R_FREE:    return &S.now.free_play;
     case R_INVERT:  return &S.now.invert_pitch;
-    case R_FRAME:   return &S.now.cockpit_frame;
     case R_SOLID:   return &S.now.occlusion;
-    case R_VIEW:    return &S.now.view_chase;
     case R_CONTROL: return &S.now.control_stick;
     case R_RESET:   return &S.now.reset_scores;
     case R_LEVELSEL: return &S.now.level_select;
+    case R_INVINCIBLE: return &S.now.invincible;
+    case R_CONTINUE: return &S.now.continues;
     }
     return NULL;
 }
 
-static int is_button(int row) { return row >= R_FIRE && row <= R_REAR; }
+static int is_button(int row) { return (row >= R_FIRE && row <= R_REAR) || row == R_MENUKEY; }
 static int button_index(int row) { return row - R_FIRE; }
+static const char *standard_of(int b);
+
+/* A row that lays out controls: what it has, and its standard. */
+static char *laid_of(int row, const char **standard)
+{
+    if (row == R_MENUKEY) { if (standard) *standard = "key_F2"; return S.now.menu_key; }
+    if (standard) *standard = standard_of(button_index(row));
+    return S.now.button[button_index(row)];
+}
 
 /* A button's standard: on the yoke where WHERE THE BUTTONS ARE says (fire
  * the right trigger, look back the left, faster and slower the thumbs); with
  * a stick buttons 1 to 4 of it and the keys AdvanceMAME gives those. */
-static const char *standard_of(int b)
+const char *service_standard(const service_settings *v, int b)
 {
     static const char *const stick[SERVICE_BUTTONS] = {
         "key_Left_Ctrl+joy1_button1", "key_Left_Alt+joy1_button2", "key_Space+joy1_button3", "key_Left_Shift+joy1_button4"
     };
     static const int place[SERVICE_BUTTONS] = { 0, 2, 3, 1 };      /* fire, faster, slower, rear */
     static char yoke[16];
-    if (S.now.control_stick) return stick[b];
-    snprintf(yoke, sizeof yoke, "yoke_button%d", S.now.yoke_layout[place[b]]);
+    if (v->control_stick) return stick[b];
+    snprintf(yoke, sizeof yoke, "yoke_button%d", v->yoke_layout[place[b]]);
     return yoke;
 }
+
+static const char *standard_of(int b) { return service_standard(&S.now, b); }
 
 /* A number shown as a slider, not as its figure alone. */
 static int is_slider(int row)
@@ -207,8 +229,9 @@ static void change(int row, int steps)
 
     if (!steps) return;
     if (is_button(row)) {               /* none, or its standard */
-        int b = button_index(row);
-        vpb_layout_toggle(&S.lay, S.now.button[b], sizeof S.now.button[b], standard_of(b));
+        const char *standard;
+        char *has = laid_of(row, &standard);
+        vpb_layout_toggle(&S.lay, has, sizeof S.now.menu_key, standard);
         sound_fx(FX_TINK);
         return;
     }
@@ -302,8 +325,9 @@ static void capture_layout(vp_input *in)
 /* Laying out a button: vpbind.h. */
 static void capture(vp_input *in)
 {
-    int b = button_index(S.row);
-    int got = vpb_layout_step(&S.lay, in, S.now.button[b], sizeof S.now.button[b], standard_of(b));
+    const char *standard;
+    char *has = laid_of(S.row, &standard);
+    int got = vpb_layout_step(&S.lay, in, has, sizeof S.now.menu_key, standard);
     if (got == VPB_CHANGED) sound_fx(FX_PICKUP);
     else if (got == VPB_LEFT) sound_fx(FX_TINK);
 }
@@ -328,8 +352,9 @@ int service_update(vp_input *in, int hotkey)
     vpb_layout_filter(&S.lay, &left, &right);
     if (is_button(S.row) && !S.editing
         && (vpb_key_pressed(SDL_SCANCODE_DELETE) || vpb_key_pressed(SDL_SCANCODE_KP_PERIOD))) {
-        int b = button_index(S.row);
-        vpb_layout_standard(&S.lay, S.now.button[b], sizeof S.now.button[b], standard_of(b));
+        const char *standard;
+        char *has = laid_of(S.row, &standard);
+        vpb_layout_standard(&S.lay, has, sizeof S.now.menu_key, standard);
         sound_fx(FX_PICKUP);
         return SERVICE_OPEN;
     }
@@ -354,13 +379,14 @@ int service_update(vp_input *in, int hotkey)
     if (!accept) return SERVICE_OPEN;
     if (S.row == R_SAVE) return SERVICE_SAVED;
     if (S.row == R_CANCEL) return SERVICE_CANCELLED;
+    if (S.row == R_SETUP) return SERVICE_SETUP;
     sound_fx(FX_TINK);
     if (S.row == R_GAME) turn_to(PAGE_GAME);
     else if (S.row == R_CONTROLS) turn_to(PAGE_CONTROLS);
     else if (S.row == R_VIDEO) turn_to(PAGE_VIDEO);
     else if (S.row == R_MONITOR) turn_to(PAGE_MONITOR);
     else if (S.row == R_BACK) turn_to(PAGE_MAIN);
-    else if (is_button(S.row)) vpb_layout_begin(&S.lay, S.now.button[button_index(S.row)]);
+    else if (is_button(S.row)) vpb_layout_begin(&S.lay, laid_of(S.row, NULL));
     else if (S.row == R_LAYOUT) { S.layout_step = 1; S.capture_armed = 0; }
     else if (row_switch(S.row)) change(S.row, 1);
     else S.editing = 1;
@@ -433,14 +459,17 @@ void service_draw(void)
         int   row = rows[i];
         int   here = row == S.row, set = here && (S.editing || S.lay.capturing);
         int   lo, hi, step, *number = row_number(row, &lo, &hi, &step), *onoff = row_switch(row);
-        float y = 3300.0f - 250.0f * (float)i;
+        /* a long page (CONTROLS, 14 rows) a little closer, clear of the help at the bottom */
+        float y = count > 12 ? 3450.0f - 210.0f * (float)i : 3300.0f - 250.0f * (float)i;
         int   r = here ? 255 : 60, g = here ? 255 : 110, b = 255;
 
         if (row == R_SAVE || row == R_CANCEL) continue;         /* side by side, below */
         if (here) text(">", 180, y, 100, VP_TEXT_RIGHT, 255, 255, 0);
         text(row_names[row], 240, y, 100, VP_TEXT_LEFT, r, g, b);
         if (set) { r = 255; g = 255; b = 0; }
-        if (row == R_GAME || row == R_CONTROLS || row == R_VIDEO || row == R_MONITOR) {
+        if (row == R_SETUP) {
+            text("START", 2300, y, 100, VP_TEXT_LEFT, r, g, b);
+        } else if (row == R_GAME || row == R_CONTROLS || row == R_VIDEO || row == R_MONITOR) {
             text("OPEN", 2300, y, 100, VP_TEXT_LEFT, r, g, b);
         } else if (row == R_SENS) {
             snprintf(value, sizeof value, "%d.%02d", *number / 100, *number % 100);
@@ -453,7 +482,7 @@ void service_draw(void)
         } else if (row == R_CONTROL) {
             text(S.now.control_stick ? "JOYSTICK + BUTTONS" : "YOKE", 2300, y, S.now.control_stick ? 80 : 100, VP_TEXT_LEFT, r, g, b);
         } else if (row == R_VIEW) {
-            text(S.now.view_chase ? "CHASE" : "COCKPIT", 2300, y, 100, VP_TEXT_LEFT, r, g, b);
+            text(view_names[*number % VIEW_COUNT], 2300, y, 100, VP_TEXT_LEFT, r, g, b);
         } else if (number && is_slider(row)) {
             slider(2300, y + 50, 1100, (float)(*number - lo) / (float)(hi - lo), here,
                    row >= R_BRIGHT && row <= R_BRIGHT_LAST ? (float)(*number < 15 ? 15 : *number) / 100.0f : 1.0f);
@@ -465,12 +494,17 @@ void service_draw(void)
         } else if (onoff) {
             text(*onoff ? "YES" : "NO", 2300, y, 100, VP_TEXT_LEFT, r, g, b);
         } else if (row == R_LAYOUT) {
+            /* further right than the other values: the row's name is long */
             if (S.layout_step && here) {
                 snprintf(value, sizeof value, "PRESS %s", place_names[S.layout_step - 1]);
-                if ((S.frames / 15) & 1) text(value, 2300, y, 80, VP_TEXT_LEFT, 255, 255, 0);
+                if ((S.frames / 15) & 1) text(value, 2650, y, 70, VP_TEXT_LEFT, 255, 255, 0);
             } else {
-                snprintf(value, sizeof value, "%d %d %d %d", S.now.yoke_layout[0], S.now.yoke_layout[1], S.now.yoke_layout[2], S.now.yoke_layout[3]);
-                text(value, 2300, y, 100, VP_TEXT_LEFT, r, g, b);
+                /* each place's number on its own, well apart: right trigger, left trigger, right thumb, left thumb */
+                int k;
+                for (k = 0; k < 4; k++) {
+                    snprintf(value, sizeof value, "%d", S.now.yoke_layout[k]);
+                    text(value, 2700.0f + 380.0f * (float)k, y, 100, VP_TEXT_LEFT, r, g, b);
+                }
             }
         } else if (S.lay.capturing && here && ((S.frames / 15) & 1)) {
             text("PRESS A BUTTON", 2300, y, 100, VP_TEXT_LEFT, 255, 255, 0);
@@ -478,7 +512,8 @@ void service_draw(void)
             /* All its controls; smaller when they would not fit. */
             char all[256];
             float size = 100.0f, room = 4000.0f - 2300.0f;
-            vpb_spelled(S.now.button[button_index(row)], all, sizeof all);
+            vpb_spelled(laid_of(row, NULL), all, sizeof all);
+            if (row == R_MENUKEY && strcmp(laid_of(row, NULL), "key_F2")) strncat(all, " + F2", sizeof all - strlen(all) - 1);
             if ((float)strlen(all) * size * 1.05f > room) size = room / ((float)strlen(all) * 1.05f);
             text(all, 2300, y, size, VP_TEXT_LEFT, r, g, b);
         }

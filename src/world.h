@@ -96,7 +96,13 @@ void world_group(void);
 /* While on, lines are drawn at once and never cut: what must always be
  * seen, as the marks on a boss's weak points. */
 void world_set_nocut(int on);
+/* While on, faces given are the cockpit's: they hide even what is never
+ * cut (world_set_nocut), and lines drawn now are never cut by anything. */
+void world_set_front(int on);
 void world_flush(void);
+/* Is this point behind a face given so far this frame? For what is put on
+ * the board at a place in the world (a letter, a number) and so is not cut. */
+int  world_hidden(vp_vec3 p);
 
 /* A short line that stands alone: a spark, a shot, a piece of something
  * burst. These are not drawn at once but kept, and world_dashes draws
@@ -106,6 +112,11 @@ void world_flush(void);
 void world_dash(vp_vec3 a, vp_vec3 b);
 void world_dashes(void);
 int  world_project(vp_vec3 p, float *sx, float *sy);   /* board units; 0 if behind */
+
+/* The other way: `n` points given in board units (x, y pairs), as world
+ * points `depth` metres in front of the camera that land just there. For
+ * what sits in front of the eye and moves with it (the cockpit). */
+void world_board_points(const float *board, int n, float depth, vp_vec3 *out);
 
 /* The ground: a grid round the eye, and the horizon. `coarse` draws every
  * second line only, for when the beam has too much to do. */
