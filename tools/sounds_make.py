@@ -77,18 +77,20 @@ SOURCES = [
     ("burner",        854476, "onset",  0,    0.9,  0.0,   0.5,     0,    0.34, 0.7),   # its ignition, deeper still: the thump as it lights
     ("engine_missile",854476, 0.4,      0,    1.2,  0,     0,       0.3,  0.2,  1.35),  # a missile's motor: the same rocket, smaller - higher and faster
     ("fall",          668549, 11.5,     0,    4.4,  0.5,   0.3,     0,    0.24, 1.15),  # a plane's dive, the howl swelling - cut before it hits (16 s)
-    ("kill",          348242, "onset",  0,    0.5,  0.0,   0.25,    0,    0.36, 1.0),   # an enemy shot down: a dry punch over a kick, a metal pipe struck on it (LAYER)
-    ("kill_2",        348242, "onset",  0,    0.5,  0.0,   0.25,    0,    0.36, 0.92),
-    ("kill_3",        348242, "onset",  0,    0.5,  0.0,   0.25,    0,    0.36, 1.06),
+    # an enemy shot down: the first crack of a blast, cut short, the dry punch under it (LAYER);
+    # each take another blast (2026-10-22: with a metal pipe on the punch it sounded like bouncing off something)
+    ("kill",          560510, "onset",  0,    0.5,  0.0,   0.3,     0,    0.36, 1.1),
+    ("kill_2",        136765, "onset",  0,    0.5,  0.0,   0.3,     0,    0.36, 1.05),
+    ("kill_3",        220062, "onset",  0,    0.5,  0.0,   0.3,     0,    0.36, 1.15),
 ]
 
 # A second recording under a piece: its freesound number, how loud against
 # the piece (each brought to the same peak first), and its own speed. Cut
 # at its onset, as long as the piece.
 LAYER = {
-    "kill":   (244983, 0.75, 1.0),
-    "kill_2": (244983, 0.75, 1.12),
-    "kill_3": (244983, 0.75, 0.9),
+    "kill":   (348242, 0.55, 1.0),
+    "kill_2": (348242, 0.55, 0.94),
+    "kill_3": (348242, 0.55, 1.06),
 }
 
 # The sounds that get a plasma zap made here laid over the recording, and
