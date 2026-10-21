@@ -401,7 +401,7 @@ void update_player(vp_input *in)
 
     /* the ground, and what is built on it: the end of the plane, whatever
      * its energy */
-    if (G.invincible && (G.p.pos.y <= ALT_CRASH || city_hit(G.era, G.p.pos, 2.5f))) {
+    if (G.invincible && (G.p.pos.y <= ALT_CRASH || (!G.practice && city_hit(G.era, G.p.pos, 2.5f)))) {
         /* testing: thrown up over it, nose up, with a jolt */
         G.p.pos.y = (G.p.pos.y <= ALT_CRASH ? ALT_CRASH : city_top(G.era, G.p.pos.x, G.p.pos.z, 0)) + 15.0f;
         if (G.p.pitch < 0.3f) G.p.pitch = 0.3f;

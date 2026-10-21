@@ -514,6 +514,7 @@ struct game_state {
     int   level_select;               /* DEBUG_LEVEL_SELECT built in: START opens it (the service menu can turn it off) */
     int   invincible;                 /* for testing: hits, the ground, buildings and the tunnel's wall do no harm */
     int   setup, setup_done;          /* the first start's setup (setup.h) is open; it has been gone through once */
+    int   practice, practice_invincible;   /* the setup's test flight is on (start_practice); invincible as it was before */
     int   continues;                  /* the last plane lost, START flies on (without the score) */
     /* Waiting for a continue: while cont_time runs nothing moves (the picture
      * stands as it was); then the plane is lost for good. cont_level is the

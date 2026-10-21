@@ -5,8 +5,10 @@
  * the cabinet has a yoke or a joystick and buttons, and walks through
  * laying them out. With the yoke: the four buttons pressed one after the
  * other (where they are), then the recommended layout. With a joystick:
- * its sensitivity, then the four buttons. The service menu (CONTROLS,
- * CONTROL SETUP) begins it again.
+ * the four buttons, then a test flight in which the buttons set the
+ * stick's sensitivity (game.c, start_practice). Without a yoke only the
+ * joystick can be taken. The service menu (CONTROLS, CONTROL SETUP)
+ * begins it again.
  */
 #ifndef TP3D_SETUP_H
 #define TP3D_SETUP_H
@@ -27,7 +29,7 @@ const service_settings *setup_get(void);
 void setup_draw(void);
 
 /* For testing: straight to a page (1 the yoke's buttons, 2 its layout,
- * 3 the stick's sensitivity, 4 its buttons, 5 its layout). */
+ * 3 the stick's buttons, 4 their layout). */
 void setup_cheat_page(int page);
 
 #endif /* TP3D_SETUP_H */

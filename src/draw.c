@@ -24,6 +24,7 @@ static void draw_radar(void);
 static void draw_hud(void);
 static void draw_cheer(void);
 static void draw_scene(int era_index, float grow);
+static void draw_practice(void);
 static int set_camera(void);
 static void draw_bossfall(void);
 static void draw_bossintro(void);
@@ -1374,6 +1375,19 @@ static void draw_cheer(void)
     world_text(G.cheer, CX, 2300.0f - h * 0.5f, h, VP_TEXT_CENTER);
 }
 
+/* Over the joystick's test flight: what it is, the sensitivity, and
+ * which button does what (game.c, update_practice). */
+
+static void draw_practice(void)
+{
+    char buf[48];
+    text("TEST FLIGHT", CX, 3380, 130, VP_TEXT_CENTER, 255, 255, 0);
+    snprintf(buf, sizeof buf, "STICK SENSITIVITY %d.%02d", (int)(G.yoke_sens + 0.001f), (int)(G.yoke_sens * 100.0f + 0.5f) % 100);
+    text(buf, CX, 3200, 110, VP_TEXT_CENTER, 255, 255, 255);
+    text("FIRE +  LOOK BACK -   FASTER ++  SLOWER --", CX, 1300, 75, VP_TEXT_CENTER, 0, 255, 120);
+    if ((G.frames / 30) & 1) text("START - DONE", CX, 1170, 90, VP_TEXT_CENTER, 255, 255, 255);
+}
+
 /* The last plane is lost: the picture stands, and over it the question
  * and the seconds left to answer it. */
 
@@ -1434,9 +1448,9 @@ static void draw_scene(int era_index, float grow)
      * shorter reach of 0.35.1 was for a monitor whose left edge gave way
      * under the load; the monitor is mended). */
     city_set_reach(920.0f);
-    city_draw(era_index, eye, (float)G.frames / 60.0f, grow);
+    if (!G.practice) city_draw(era_index, eye, (float)G.frames / 60.0f, grow);     /* the test flight: the ground alone */
     world_level(G.bright[BRIGHT_CLOUDS]);
-    if (no_sky) {
+    if (no_sky || G.practice) {
         /* nothing in the sky this frame */
     } else if (era_index == 4) {               /* 2001 is far out: rocks drift where the clouds were, and hurt nobody */
         world_rgb(200, 160, 120);
@@ -1957,7 +1971,7 @@ static void draw_frame(vp_dvg *d)
     if (G.state == INITIALS) { draw_initials(); return; }
     if (G.state == TUTORIAL) {
         /* the yoke's, whatever the cabinet is flown with; then the items */
-        if (G.state_time < HOWTO_TIME) draw_howto();
+        if (G.state_time < HOWTO_TIME) { if (G.control_stick) draw_howto_stick(); else draw_howto(); }
         else draw_items_page(1);
         return;
     }
@@ -1997,4 +2011,5 @@ static void draw_frame(vp_dvg *d)
     draw_hud();
     draw_cheer();
     if (G.demo) draw_coin_line();
+    if (G.practice) draw_practice();
 }

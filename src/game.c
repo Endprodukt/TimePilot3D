@@ -60,6 +60,8 @@ static void update_service(vp_input *in, int hotkey);
 static void open_setup(void);
 static void update_setup(vp_input *in);
 static void factory_reset(void);
+static void start_practice(void);
+static void update_practice(vp_input *in);
 static void default_scores(void);
 
 /* eras: see struct era in game_internal.h. */
@@ -711,7 +713,8 @@ static void step(vp_input *in)
         if (G.state == INTRO && G.state_time >= INTRO_TIME) enter(PLAYING);
         break;
     case PLAYING:
-        update_playing(in);
+        if (G.practice) update_practice(in);
+        else update_playing(in);
         break;
     case DYING:
         update_objects();
@@ -799,7 +802,7 @@ static void step(vp_input *in)
     /* START changes the view while a game is flown (a coin's START was
      * taken above, and ends this step): the display alone, the cockpit,
      * from behind, and round again. */
-    if (!G.demo && !G.selftest && (G.state == PLAYING || G.state == INTRO) && G.state_time > 0.2f
+    if (!G.demo && !G.selftest && !G.practice && (G.state == PLAYING || G.state == INTRO) && G.state_time > 0.2f
         && vp_input_pressed(in, "start1"))
         set_view(G.chase ? VIEW_HUD : G.hud_only ? VIEW_COCKPIT : VIEW_CHASE);
 
@@ -818,6 +821,7 @@ static void step(vp_input *in)
 
 static void enter_attract(int page)
 {
+    if (G.practice) { G.practice = 0; G.invincible = G.practice_invincible; }    /* (left by the menu) */
     G.demo = 0;
     G.cont_time = 0;
     G.page = page;
@@ -1161,7 +1165,55 @@ static void update_setup(vp_input *in)
     G.setup_done = 1;
     notice(save_settings() ? "SETTINGS SAVED" : "CANNOT SAVE SETTINGS");
     sound_volumes(G.volume, G.effects_volume, G.engine_volume, G.music_volume);
-    enter_attract(PAGE_TITLE);
+    if (G.control_stick) start_practice();     /* the stick's sensitivity, set in flight */
+    else enter_attract(PAGE_TITLE);
+}
+
+/* The joystick's test flight, the setup's last step: the plane over the
+ * ground and nothing else - no enemies, no buildings, no clouds, and
+ * nothing can harm it. The stick flies it; fire and look back make the
+ * sensitivity a little more and less, faster and slower a lot; START ends
+ * it, keeps what was set, and the game goes to its title. */
+
+#define PRACTICE_STEP 5                     /* hundredths of sensitivity a press; faster and slower five times that */
+
+static void start_practice(void)
+{
+    G.practice = 1;
+    G.practice_invincible = G.invincible;
+    G.invincible = 1;
+    G.demo = 0;
+    G.players = 1;
+    G.cur = 0;
+    G.score = 0;
+    G.lives = 0;
+    sound_mute(0);
+    G.muted = 0;
+    start_level(G.start_level, 1);
+    enter(PLAYING);                         /* no film of the way in */
+}
+
+static void update_practice(vp_input *in)
+{
+    int steps = 0;
+    if (controls_pressed(in, G.btn_fire)) steps = 1;
+    if (controls_pressed(in, G.btn_rear)) steps = -1;
+    if (controls_pressed(in, G.btn_faster)) steps = 5;
+    if (controls_pressed(in, G.btn_slower)) steps = -5;
+    if (steps) {
+        G.yoke_sens = clampf(G.yoke_sens + (float)(steps * PRACTICE_STEP) / 100.0f, 0.25f, 3.0f);
+        G.yoke_sens = (float)(int)(G.yoke_sens * 100.0f + 0.5f) / 100.0f;
+        sound_fx(FX_TINK);
+    }
+    update_player(in);
+    update_objects();
+    if (G.state_time > 0.5f && vp_input_pressed(in, "start1")) {
+        G.practice = 0;
+        G.invincible = G.practice_invincible;
+        notice(save_settings() ? "SETTINGS SAVED" : "CANNOT SAVE SETTINGS");
+        sound_fx(FX_PICKUP);
+        enter_attract(PAGE_TITLE);
+    }
 }
 
 /* FACTORY RESET AND RESTART: save/settings.ini and the high scores go,
@@ -1259,7 +1311,12 @@ void game_cheat_debugsel(int row)
 
 void game_cheat_service(void) { G.setup = 0; open_service(); service_show_monitor(); }
 
-void game_cheat_setup(int page) { open_setup(); setup_cheat_page(page); }
+void game_cheat_setup(int page)
+{
+    if (page == 5) { G.setup = 0; G.control_stick = 1; start_practice(); return; }     /* the joystick's test flight */
+    open_setup();
+    setup_cheat_page(page);
+}
 
 void game_cheat_continue(void)
 {

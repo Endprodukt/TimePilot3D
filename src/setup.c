@@ -13,7 +13,7 @@
 #include <stdio.h>
 #include <string.h>
 
-enum { P_CHOOSE, P_YOKE_BUTTONS, P_YOKE_LAYOUT, P_SENS, P_STICK_BUTTONS, P_STICK_LAYOUT };
+enum { P_CHOOSE, P_YOKE_BUTTONS, P_YOKE_LAYOUT, P_STICK_BUTTONS, P_STICK_LAYOUT };
 
 #define SENS_MIN       25               /* hundredths, as in the service menu */
 #define SENS_MAX       300
@@ -90,15 +90,21 @@ static int go_on(vp_input *in, int fire_too)
     return vpb_menu_confirm(in) || (fire_too && vpb_pressed(S.now.button[SERVICE_FIRE]));
 }
 
+/* Without a yoke there is nothing to choose: only the joystick can be
+ * taken (2026-10-21: the cursor could go up to YOKE, and then nothing
+ * could be done with it). */
+static int yoke_there(void) { return controls_yoke_present() || S.cheat; }
+
 static void choose(vp_input *in)
 {
     int way = vpb_menu_up() ? -1 : vpb_menu_down() ? 1 : 0;
-    if (way && S.choice != (way > 0)) { S.choice = way > 0; sound_fx(FX_TINK); }
+    if (!yoke_there()) S.choice = 1;
+    else if (way && S.choice != (way > 0)) { S.choice = way > 0; sound_fx(FX_TINK); }
     if (!go_on(in, 0)) return;
     sound_fx(FX_PICKUP);
     S.now.control_stick = S.choice;
     standard_buttons();
-    turn_to(S.choice ? P_SENS : P_YOKE_BUTTONS);
+    turn_to(S.choice ? P_STICK_BUTTONS : P_YOKE_BUTTONS);
 }
 
 /* The yoke's four places, pressed one after the other; a button that has
@@ -125,21 +131,6 @@ static void yoke_buttons(vp_input *in)
     turn_to(P_YOKE_LAYOUT);
 }
 
-static void sensitivity(vp_input *in)
-{
-    int x = vpb_menu_way_x();
-    S.held_h = x ? S.held_h + 1 : 0;
-    if (S.held_h == 1 || (S.held_h > REPEAT_DELAY && (S.held_h - REPEAT_DELAY) % REPEAT_EVERY == 0)) {
-        S.sens += 5 * x;
-        if (S.sens < SENS_MIN) S.sens = SENS_MIN;
-        if (S.sens > SENS_MAX) S.sens = SENS_MAX;
-        sound_fx(FX_TINK);
-    }
-    if (!go_on(in, 0)) return;
-    sound_fx(FX_PICKUP);
-    turn_to(P_STICK_BUTTONS);
-}
-
 /* The stick's four, each laid out as in the service menu (vpbind.h): the
  * button pressed, or START 1 to keep the standard. */
 static void stick_buttons(vp_input *in)
@@ -164,7 +155,6 @@ int setup_update(vp_input *in)
     switch (S.page) {
     case P_CHOOSE:        choose(in); break;
     case P_YOKE_BUTTONS:  yoke_buttons(in); break;
-    case P_SENS:          sensitivity(in); break;
     case P_STICK_BUTTONS: stick_buttons(in); break;
     case P_YOKE_LAYOUT:
     case P_STICK_LAYOUT:
@@ -176,8 +166,8 @@ int setup_update(vp_input *in)
 
 void setup_cheat_page(int page)
 {
-    static const int pages[] = { P_CHOOSE, P_YOKE_BUTTONS, P_YOKE_LAYOUT, P_SENS, P_STICK_BUTTONS, P_STICK_LAYOUT };
-    if (page < 0 || page > 5) return;
+    static const int pages[] = { P_CHOOSE, P_YOKE_BUTTONS, P_YOKE_LAYOUT, P_STICK_BUTTONS, P_STICK_LAYOUT };
+    if (page < 0 || page > 4) return;
     S.now.control_stick = page >= 3;
     standard_buttons();
     turn_to(pages[page]);
@@ -259,9 +249,14 @@ void setup_draw(void)
         text("HOW DO YOU CONTROL THE GAME?", CX, 3000, 130, VP_TEXT_CENTER, 255, 255, 255);
         for (i = 0; i < 2; i++) {
             float y = 2300.0f - 450.0f * (float)i;
-            int here = S.choice == i;
+            int here = S.choice == i, off = i == 0 && !yoke_there();
             if (here) text(">", 900, y, 150, VP_TEXT_RIGHT, 255, 255, 0);
-            text(i ? "JOYSTICK AND BUTTONS" : "YOKE", 1000, y, 150, VP_TEXT_LEFT, here ? 255 : 60, here ? 255 : 110, 255);
+            if (off) {                      /* nothing to take */
+                text("YOKE", 1000, y, 150, VP_TEXT_LEFT, 50, 50, 70);
+                text("NOT CONNECTED", 1700, y + 20, 80, VP_TEXT_LEFT, 120, 60, 60);
+            } else {
+                text(i ? "JOYSTICK AND BUTTONS" : "YOKE", 1000, y, 150, VP_TEXT_LEFT, here ? 255 : 60, here ? 255 : 110, 255);
+            }
         }
         text(controls_yoke_present() ? "A YOKE IS CONNECTED" : "NO YOKE IS CONNECTED", CX, 1100, 90, VP_TEXT_CENTER, 0, 150, 150);
         help("UP, DOWN - CHOOSE", "START - TAKE");
@@ -293,25 +288,6 @@ void setup_draw(void)
         help("CHANGE IT IN THE SERVICE MENU (F2), CONTROLS", "FIRE OR START - PLAY");
         break;
 
-    case P_SENS: {
-        float x0 = 900.0f, width = 2300.0f, part = (float)(S.sens - SENS_MIN) / (float)(SENS_MAX - SENS_MIN);
-        float knob = x0 + width * part;
-        text("JOYSTICK SENSITIVITY", CX, 3000, 130, VP_TEXT_CENTER, 255, 255, 255);
-        text("HOW SHARPLY THE PLANE TURNS", CX, 2700, 90, VP_TEXT_CENTER, 0, 150, 150);
-        world_rgb(0, 255, 255);
-        world_bline(x0, 2050, x0, 2150);
-        world_bline(x0, 2100, knob, 2100);
-        world_rgb(40, 60, 110);
-        world_bline(knob, 2100, x0 + width, 2100);
-        world_bline(x0 + width, 2050, x0 + width, 2150);
-        world_rgb(255, 255, 0);
-        rect(knob - 40, 2060, knob + 40, 2140);
-        snprintf(buf, sizeof buf, "%d.%02d", S.sens / 100, S.sens % 100);
-        text(buf, CX, 1700, 150, VP_TEXT_CENTER, 255, 255, 0);
-        help("LEFT, RIGHT - SET", "START - NEXT");
-        break;
-    }
-
     case P_STICK_BUTTONS:
     case P_STICK_LAYOUT: {
         const char *said = vpb_layout_said(&S.lay);
@@ -337,7 +313,7 @@ void setup_draw(void)
         }
         if (said) text(said, CX, 420, 80, VP_TEXT_CENTER, 255, 80, 80);
         if (S.page == P_STICK_BUTTONS) help("START 1 - KEEP THE STANDARD   START 2 - NONE", "THE STICK MOVES THE PLANE: ONLY BUTTONS HERE");
-        else help("CHANGE IT IN THE SERVICE MENU (F2), CONTROLS", "FIRE OR START - PLAY");
+        else help("NEXT: A TEST FLIGHT TO SET THE STICK'S SENSITIVITY", "FIRE OR START - FLY");
         break;
     }
     }

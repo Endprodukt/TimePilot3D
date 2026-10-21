@@ -14,9 +14,11 @@ build/pc/timepilot3d.exe --windowed            # 4:3
 build/pc/timepilot3d.exe --windowed --vertical # 3:4
 ```
 
-Tasten am PC (AdvanceMAME-Vorgaben, solange keine `advmame.rc` etwas anderes sagt): Pfeiltasten steuern (hoch = Yoke nach vorn = Sturzflug, siehe `invert_pitch`), Strg links = Feuer, Alt links = schneller, Leertaste = langsamer, Shift links = Blick nach hinten, 5 = Münze, 1 = Start und im Spiel Ansicht wechseln, TAB = Service-Menü, Esc = Ende. Ein Joystick wird als Yoke gelesen (`p1_stickx`, `p1_sticky`).
+Tasten am PC (AdvanceMAME-Vorgaben, solange keine `advmame.rc` etwas anderes sagt): Pfeiltasten steuern (hoch = Yoke nach vorn = Sturzflug, siehe `invert_pitch`), Strg links = Feuer, Alt links = schneller, Leertaste = langsamer, Shift links = Blick nach hinten, 5 = Münze, 1 = Start und im Spiel Ansicht wechseln, F2 = Service-Menü, Esc = Ende. Ein Joystick wird als Yoke gelesen (`p1_stickx`, `p1_sticky`).
 
 `VP_STATS=1` gibt einmal pro Sekunde die Kosten eines Bildes aus (Linien, Sprünge, Weglängen). Gemessen am PC im Demo: im Schnitt 550 Linien und 220 Sprünge je Bild, Spitzen bei 1250 Linien und 500 Sprüngen.
+
+PC-Testversion für andere (seit 0.65.0): Das Programm braucht außer Windows nur `SDL2.dll` (alles andere ist eingebaut, geprüft mit `ldd` und einem Start ohne MinGW im Pfad). Ein Ordner `build/TimePilot3D-<version>-PC` mit `timepilot3d.exe`, `SDL2.dll`, `game.ini`, `sounds/`, `music/` und `LIESMICH.txt` (Start, Tasten, Zurücksetzen), gepackt als `build/TimePilot3D-<version>-PC.zip` (rund 12 MB). Ohne `save/`: Die Tester beginnen mit der Einrichtung des ersten Starts.
 
 ## Raspberry Pi (arm64)
 
@@ -135,7 +137,7 @@ Das Spiel spielt sich selbst (Autopilot, unendlich Leben) und meldet jede Ära a
 TP3D_SELFTEST=300,6 SDL_AUDIODRIVER=dummy ./timepilot3d.exe --windowed 2> selftest.txt
 ```
 
-Die zwei Zahlen: Schritte je Bild (300 heißt eine Ära in rund einer Minute) und wie viele Ären. Je Ära eine Zeile mit Bildern, Toden, Punkten und einem Fingerabdruck des ganzen Spielzustands. Der Selbsttest ist deterministisch: Zwei Läufe liefern dieselben Zeilen, und jede Änderung am Verhalten ändert die Fingerabdrücke. So lässt sich ein Umbau prüfen, der nichts ändern soll: Lauf vorher und nachher vergleichen (im Selbsttest ist der Lastregler des Strahls abgeschaltet, der sonst vom echten Bildtakt abhängt); eine Ära, die nach 30000 Bildern nicht endet, wird als `stuck` gemeldet und das Programm beendet. Bestenliste und Einstellungen werden nicht angefasst.
+Die zwei Zahlen: Schritte je Bild (300 heißt eine Ära in rund einer Minute) und wie viele Ären. Je Ära eine Zeile mit Bildern, Toden, Punkten und einem Fingerabdruck des ganzen Spielzustands. Der Selbsttest ist deterministisch: Zwei Läufe liefern dieselben Zeilen, und jede Änderung am Verhalten ändert die Fingerabdrücke. So lässt sich ein Umbau prüfen, der nichts ändern soll: Lauf vorher und nachher vergleichen (im Selbsttest ist der Lastregler des Strahls abgeschaltet, der sonst vom echten Bildtakt abhängt); eine Ära, die nach 30000 Bildern nicht endet, wird als `stuck` gemeldet und das Programm beendet. Bestenliste und Einstellungen werden nicht angefasst. Gelesen werden die Einstellungen aber: Eine `save/settings.ini` neben dem Programm (etwa mit anderer Empfindlichkeit oder Steuerart) ändert den Lauf und die Fingerabdrücke - zum Vergleichen ohne sie laufen lassen.
 
 ## Paket für den Automaten
 
