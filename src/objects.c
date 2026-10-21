@@ -437,6 +437,20 @@ static void site_shot(vp_vec3 at)
 
 /* A shot lands on an enemy: the big ones take several. */
 
+/* An enemy goes down: besides its explosion (where it is, softer the
+ * farther), a short dry crack that says it at once - from its side, near,
+ * the same at any distance but a little quieter far off. Every pass at the
+ * player is meant to end with it. */
+static void kill_sound(vp_vec3 at)
+{
+    static unsigned rnd = 0x51A7u;
+    vp_vec3 to = vp_v3_sub(at, G.p.pos);
+    float d = vp_v3_length(to), h = G.view_heading;
+    rnd = rnd * 1664525u + 1013904223u;
+    sound_fx_at(FX_KILL, clampf(1.0f - d / 1500.0f, 0.65f, 1.0f), 0.96f + 0.08f * (float)(rnd >> 8) / 16777216.0f,
+                d > 1.0f ? 0.5f * vp_v3_dot(to, vp_v3(cosf(h), 0, -sinf(h))) / d : 0.0f);
+}
+
 static void enemy_hit(obj *o, vp_vec3 at)
 {
     if (o->heavy && --o->hp > 0) {
@@ -445,6 +459,7 @@ static void enemy_hit(obj *o, vp_vec3 at)
         burst(at, o->vel, 4, 20.0f, 0.4f, SPARK_FIRE, 0);
         return;
     }
+    kill_sound(at);
     enemy_down(o);
 }
 

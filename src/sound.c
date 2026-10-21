@@ -407,6 +407,11 @@ static float gen_missile_loop(float t)      /* a rocket motor: a hiss that flutt
     return 0.35f * lowpass(noise(), 0.45f) * (0.7f + 0.3f * sinf(PI2 * 23.0f * t));
 }
 
+static float gen_kill(float t)              /* an enemy shot down (stands in for kill.wav): a thump and a crack */
+{
+    return 0.5f * (sinf(PI2 * 70.0f * t) * expf(-t / 0.08f) + lowpass(noise(), 0.6f) * expf(-t / 0.03f));
+}
+
 static float gen_scream(float t)            /* a parachutist shot (stands in for scream.wav): a voice falling away, wavering */
 {
     float f = 700.0f * expf(-0.9f * t), v = sinf(PI2 * f * t + 4.0f * sinf(PI2 * 6.0f * t));
@@ -473,11 +478,11 @@ static const char *const fx_file[FX_COUNT] = {
     [FX_START] = "start", [FX_BOSS] = "boss", [FX_HIT_BOSS] = "hit_boss", [FX_ONEUP] = "oneup",
     [FX_ENEMY_SHOT] = "enemy_shot", [FX_HIT] = "hit", [FX_STALL] = "stall", [FX_BONUS] = "bonus",
     [FX_FORMATION] = "formation", [FX_WARN] = "warn", [FX_PORTAL] = "portal", [FX_WHOOSH] = "whoosh",
-    [FX_BURNER] = "burner", [FX_FALL] = "fall", [FX_RING] = "ring", [FX_SCREAM] = "scream",
+    [FX_BURNER] = "burner", [FX_FALL] = "fall", [FX_RING] = "ring", [FX_SCREAM] = "scream", [FX_KILL] = "kill",
 };
 
 /* What happens somewhere, and is heard from its side. */
-static int placed(int fx) { return fx == FX_EXPLODE || fx == FX_BIG_EXPLODE || fx == FX_ENEMY_SHOT || fx == FX_HIT_BOSS || fx == FX_FALL || fx == FX_SCREAM; }
+static int placed(int fx) { return fx == FX_EXPLODE || fx == FX_BIG_EXPLODE || fx == FX_ENEMY_SHOT || fx == FX_HIT_BOSS || fx == FX_FALL || fx == FX_SCREAM || fx == FX_KILL; }
 
 /* --- making them --------------------------------------------------------- */
 
@@ -685,6 +690,7 @@ void sound_init(vp_audio *a)
     s_dump_name = fx_file[FX_FALL]; s_fx[FX_FALL] = synth(2.5f, gen_fall);
     s_dump_name = fx_file[FX_RING]; s_fx[FX_RING] = synth(0.9f, gen_ring);
     s_dump_name = fx_file[FX_SCREAM]; s_fx[FX_SCREAM] = synth(1.2f, gen_scream);
+    s_dump_name = fx_file[FX_KILL]; s_fx[FX_KILL] = synth(0.3f, gen_kill);
     {
         /* A recording in the game's sounds/ folder by an effect's name
          * stands in for the one made here. */
@@ -797,6 +803,7 @@ static float fx_level(int fx)
     case FX_BIG_EXPLODE: return 1.25f;
     case FX_HIT_BOSS:   return 1.1f;      /* a hit on something that takes several: clearly heard */
     case FX_RING:       return 1.1f;      /* over the tunnel's music */
+    case FX_KILL:       return 0.8f;      /* clear, not loud: a confirmation, the explosion does the rest (2026-10-21) */
     case FX_SCREAM:     return 0.45f;     /* heard, not loud: the recordings are hot (mean 0.24 to 0.34, peaks at full) - under an explosion (2026-10-21) */
     case FX_DEATH:      return 1.0f;
     case FX_WARP:       return s_music_volume > 0.05f ? 0.45f : 0.9f;    /* under the tunnel's music, the air */
@@ -868,7 +875,7 @@ static void duck_under(int fx, float gain)
 
 static int ducked(int fx)
 {
-    return !(fx == FX_DEATH || fx == FX_BIG_EXPLODE || fx == FX_EXPLODE || fx == FX_WARP || fx == FX_PORTAL || fx == FX_HIT_BOSS || fx == FX_RING);
+    return !(fx == FX_DEATH || fx == FX_BIG_EXPLODE || fx == FX_EXPLODE || fx == FX_WARP || fx == FX_PORTAL || fx == FX_HIT_BOSS || fx == FX_RING || fx == FX_KILL);
 }
 
 /* How much each counts towards how busy the mix is. */

@@ -585,7 +585,7 @@ static void debug_select(vp_input *in)
     way = y < -0.5f ? -1 : y > 0.5f ? 1 : 0;
     if (way && way != G.debug_y) { G.debug_sel = (G.debug_sel + way + rows) % rows; sound_fx(FX_TINK); }
     G.debug_y = way;
-    if (G.state_time > 0.3f && yes_now) {
+    if (G.state_time > 0.3f && (yes_now || controls_pressed(in, G.btn_fire))) {     /* START or fire, as it says */
         debug_row(G.debug_sel, &era_of, &stage);
         G.start_level = era_of;
         G.debug_boss = stage >= 0;
@@ -939,7 +939,7 @@ static void load_settings(void)
     G.yoke_deadzone = 12;
     G.aim_assist = 40;
     G.occlusion = 1;
-    G.level_select = 1;
+    G.level_select = 0;                     /* a developer's aid: off unless asked for (2026-10-21) */
     G.view_ini = VIEW_HUD;                  /* the display alone, unless game.ini or the service menu say otherwise */
     G.continues = 1;
     G.picture_size = 100;

@@ -77,7 +77,19 @@ SOURCES = [
     ("burner",        854476, "onset",  0,    0.9,  0.0,   0.5,     0,    0.34, 0.7),   # its ignition, deeper still: the thump as it lights
     ("engine_missile",854476, 0.4,      0,    1.2,  0,     0,       0.3,  0.2,  1.35),  # a missile's motor: the same rocket, smaller - higher and faster
     ("fall",          668549, 11.5,     0,    4.4,  0.5,   0.3,     0,    0.24, 1.15),  # a plane's dive, the howl swelling - cut before it hits (16 s)
+    ("kill",          348242, "onset",  0,    0.5,  0.0,   0.25,    0,    0.36, 1.0),   # an enemy shot down: a dry punch over a kick, a metal pipe struck on it (LAYER)
+    ("kill_2",        348242, "onset",  0,    0.5,  0.0,   0.25,    0,    0.36, 0.92),
+    ("kill_3",        348242, "onset",  0,    0.5,  0.0,   0.25,    0,    0.36, 1.06),
 ]
+
+# A second recording under a piece: its freesound number, how loud against
+# the piece (each brought to the same peak first), and its own speed. Cut
+# at its onset, as long as the piece.
+LAYER = {
+    "kill":   (244983, 0.75, 1.0),
+    "kill_2": (244983, 0.75, 1.12),
+    "kill_3": (244983, 0.75, 0.9),
+}
 
 # The sounds that get a plasma zap made here laid over the recording, and
 # the zap's make: (start Hz, end Hz, fall in seconds, FM ratio, seed).
@@ -147,7 +159,7 @@ def onset(a, rate):
 
 def make(src_dir, out_dir, row):
     name, sid, at, lead, length, fin, fout, loop, rms, speed = row
-    path = [os.path.join(src_dir, f) for f in os.listdir(src_dir) if f.startswith("%d__" % sid)][0]
+    path = [os.path.join(src_dir, f) for f in os.listdir(src_dir) if f.startswith("%d__" % sid) and f.endswith((".wav", ".aif", ".aiff"))][0]
     a, rate, ch, bits = read_any(path)
     a = np.nan_to_num(a)
     a = a - np.mean(a)                                 # no offset
@@ -162,6 +174,15 @@ def make(src_dir, out_dir, row):
     i1 = len(a) if length is None else min(len(a), i0 + int((length + extra) * rate))
     piece = a[i0:i1]
     piece = resample(piece, rate, speed)
+    if name in LAYER:
+        lid, gain, lspeed = LAYER[name]
+        lpath = [os.path.join(src_dir, f) for f in os.listdir(src_dir) if f.startswith("%d__" % lid) and f.endswith((".wav", ".aif", ".aiff"))][0]
+        b, brate, _, _ = read_any(lpath)
+        b = np.nan_to_num(b)
+        b = b - np.mean(b)
+        b = resample(b[int(onset(b, brate) * brate):], brate, lspeed)[:len(piece)]
+        b = np.pad(b, (0, len(piece) - len(b)))
+        piece = (piece / max(1e-6, np.max(np.abs(piece))) + gain * b / max(1e-6, np.max(np.abs(b)))).astype(np.float32)
     if name in ZAP:
         piece = with_zap(piece, ZAP[name])
     if loop:
@@ -189,6 +210,8 @@ def make(src_dir, out_dir, row):
 
 if __name__ == "__main__":
     src, out = sys.argv[1], sys.argv[2]
+    only = set(sys.argv[3:])                           # names after the folders: just those
     os.makedirs(out, exist_ok=True)
     for row in SOURCES:
-        make(src, out, row)
+        if not only or row[0] in only:
+            make(src, out, row)

@@ -30,6 +30,7 @@ enum {
     FX_FALL,            /* a plane shot down goes into its dive: the howl before it hits */
     FX_RING,            /* a ring of the time tunnel passed: a chime (higher and louder through its middle) */
     FX_SCREAM,          /* a parachutist shot: a scream as he falls (scream.wav and its takes, one at random) */
+    FX_KILL,            /* an enemy shot down: a dry crack to say so, at once and near, under its explosion */
     FX_COUNT
 };
 

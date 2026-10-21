@@ -19,3 +19,6 @@ scp -q $K package/marquee.png $H:$D/marquee.png || exit 1
 ssh $K $H "mkdir -p $D/save && touch $D/save/highscores.txt" || exit 1
 ssh $K $H "cd $D && pkill -INT -x timepilot3d; for i in 1 2 3 4 5 6; do pgrep -x timepilot3d > /dev/null || break; sleep 0.5; done; pkill -KILL -x timepilot3d; chmod 755 timepilot3d.new run.sh && mv -f timepilot3d.new timepilot3d && md5sum timepilot3d && grep '^version' game.ini && (setsid nohup ./run.sh > /dev/null 2>&1 &) ; sleep 6; pgrep -x timepilot3d > /dev/null && echo game-running || echo GAME-NOT-RUNNING"
 md5sum build/pi/timepilot3d
+# and the package of what is now on the cabinet, in the project's build
+# folder: every version there (the user's rule, 2026-10-21; make_vpk.sh)
+sh tools/make_vpk.sh | tail -n 2

@@ -9,7 +9,6 @@ static float floor_at(float x, float z);
 static void spawn_enemy(void);
 static void spawn_formation(void);
 static void spawn_heavy(void);
-static void throw_bomb(obj *o);
 static void spawn_boss(void);
 static int hunters_wanted(void);
 static void thin_for_boss(void);
@@ -138,23 +137,6 @@ static void spawn_heavy(void)
 
 /* 1910: a bomb thrown from a biplane. It goes up first and comes down in
  * an arc, aimed to come down where the player will be half the time. */
-
-static void throw_bomb(obj *o)
-{
-    const float g = 30.0f;
-    obj *b = new_obj(K_BOMB);
-    float d = dist3(o->pos, G.p.pos), t = clampf(d / 70.0f, 1.2f, 3.5f);
-    vp_vec3 target = vp_v3_add(G.p.pos, vp_v3_scale(player_velocity(), t * 0.5f));
-
-    if (!b) return;
-    b->pos = o->pos;
-    b->vel = vp_v3_scale(vp_v3_sub(target, o->pos), 1.0f / t);
-    b->vel.y += 0.5f * g * t;
-    b->ang = vp_v3(frand() * 6.0f, frand() * 6.0f, frand() * 6.0f);
-    b->life = 6.0f;
-    b->value = (int)DMG_BOMB;
-    if (d < 500.0f) sound_at(FX_ENEMY_SHOT, o->pos);
-}
 
 static void spawn_boss(void)
 {
@@ -559,7 +541,7 @@ static vp_vec3 attack_target(obj *o, float d, float speed)
 }
 
 /* 1910: at the player, weaving up and down; past it, on for a moment
- * before turning back. And bombs. */
+ * before turning back. */
 
 static void fight_pursuit(obj *o, float d, float speed)
 {
@@ -576,11 +558,8 @@ static void fight_pursuit(obj *o, float d, float speed)
     }
     fly(o);
     nose_guns(o, d);
-    /* and bombs, thrown at the player from above or level with it */
-    if ((o->bomb -= DT) <= 0 && player_targetable() && d < 340.0f && d > 80.0f && o->pos.y > G.p.pos.y - 40.0f) {
-        throw_bomb(o);
-        o->bomb = (4.0f + frand() * 4.0f) / hard()->fire;
-    }
+    /* (no bombs any more, 2026-10-21: the tumbling cans they threw looked
+     * like pieces of their own planes - they shoot, as everybody does) */
 }
 
 /* 1940: a pass aimed ahead of the player, then away in a climb to turn

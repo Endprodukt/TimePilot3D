@@ -344,7 +344,6 @@ struct boss {
 extern const struct boss bosses[ERA_COUNT];
 #define HEAVY_POINTS    1500
 #define HEAVY_KILLS     3           /* what a big one counts towards the boss */
-#define DMG_BOMB        20.0f
 #define CHUTE_SIZE      1.7f        /* a parachutist: metres for one unit of his drawing (he is 11 units tall with the canopy) */
 #define CHUTE_SAFE      1.5f        /* seconds after he is out in which no shot touches him: the burst that shot his plane down is still coming (3 until 2026-10-21) */
 #define MISSILE_POINTS  200         /* a missile shot out of the air */

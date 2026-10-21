@@ -30,3 +30,11 @@ with tarfile.open(path, "r:gz") as old, tarfile.open(fileobj=out, mode="w:gz") a
         new.addfile(member, old.extractfile(member) if member.isfile() else None)
 open(path, "wb").write(out.getvalue())
 PY
+
+# Every version's package belongs in the project's own build folder (the
+# user's rule, 2026-10-21) - also when this runs in a worktree of it
+# (.claude/worktrees/...), whose build folder nobody looks in.
+main=$(dirname "$(git -C "$root" rev-parse --path-format=absolute --git-common-dir)")
+if [ -d "$main" ] && [ "$(cd "$main" && pwd)" != "$root" ]; then
+    mkdir -p "$main/build" && cp "$vpk" "$main/build/" && echo "make_vpk: also in $main/build/$(basename "$vpk")"
+fi
