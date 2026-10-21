@@ -57,8 +57,10 @@ typedef struct service_settings {
 } service_settings;
 
 /* SERVICE_SETUP: CONTROL SETUP was chosen - the menu closes without saving
- * and the first start's setup (setup.h) begins. */
-enum { SERVICE_OPEN = 0, SERVICE_SAVED, SERVICE_CANCELLED, SERVICE_SETUP };
+ * and the first start's setup (setup.h) begins. SERVICE_FACTORY: FACTORY
+ * RESET AND RESTART was chosen (twice) - everything saved is to go, and
+ * the game begins as on its first start. */
+enum { SERVICE_OPEN = 0, SERVICE_SAVED, SERVICE_CANCELLED, SERVICE_SETUP, SERVICE_FACTORY };
 
 /* A button's standard for these settings (SERVICE_ index): on the yoke
  * where its layout says (fire the right trigger, look back the left,

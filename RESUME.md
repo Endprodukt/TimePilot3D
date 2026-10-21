@@ -48,6 +48,6 @@
 
 0. **Vor einer Freigabe:** `DEBUG_LEVEL_SELECT` in `src/service.h` auf 0 setzen (Level-Auswahl bei START, nur zum Testen).
 
-1. Deployment auf den Automaten (`BUILD.md`), Rückmeldung des Nutzers einarbeiten. Am Automaten läuft 0.62.0, und dieser Stand ist auf `main` eingecheckt (2026-10-21, mit den vorher nicht eingecheckten Änderungen 0.51/0.52; deren alte Fassung als Sicherung in `build/backup-uncommitted-0.52.diff`). Das Paket 0.62.0 lädt der Nutzer selbst in den Drive-Ordner (BUILD.md). `run.log` auf Bildkosten prüfen, sie sind mit Gebäuden und HUD deutlich gestiegen.
+1. Deployment auf den Automaten (`BUILD.md`), Rückmeldung des Nutzers einarbeiten. Am Automaten läuft 0.62.0, und dieser Stand ist auf `main` eingecheckt (2026-10-21, mit den vorher nicht eingecheckten Änderungen 0.51/0.52; deren alte Fassung als Sicherung in `build/backup-uncommitted-0.52.diff`). Das Paket 0.62.0 lädt der Nutzer selbst in den Drive-Ordner (BUILD.md). Am Automaten und auf main: 0.63.0 (FACTORY RESET AND RESTART). `run.log` auf Bildkosten prüfen, sie sind mit Gebäuden und HUD deutlich gestiegen.
 2. Nach jeder Änderung an der Spiellogik den Selbsttest laufen lassen und Bilder ansehen: mit `tools/record.sh` und `tools/dvgview.py` (Aufzeichnung der Platinen-Daten unter WSL, `BUILD.md`); `tools/snap.ps1` liefert derzeit nur Schwarz (`TP3D_PAGE`, `TP3D_LEVEL`, `TP3D_KILLS` helfen dabei). Für einen Umbau, der nichts ändern soll: Fingerabdrücke des Selbsttests vorher und nachher vergleichen (`BUILD.md`).
 3. Offene Punkte aus `STATUS.md`.

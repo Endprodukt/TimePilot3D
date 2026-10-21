@@ -59,6 +59,7 @@ static void open_service(void);
 static void update_service(vp_input *in, int hotkey);
 static void open_setup(void);
 static void update_setup(vp_input *in);
+static void factory_reset(void);
 static void default_scores(void);
 
 /* eras: see struct era in game_internal.h. */
@@ -1121,6 +1122,7 @@ static void update_service(vp_input *in, int hotkey)
     if (result == SERVICE_OPEN) return;
     G.service = 0;
     if (result == SERVICE_SETUP) { open_setup(); return; }       /* CONTROL SETUP: what the menu had is not kept */
+    if (result == SERVICE_FACTORY) { factory_reset(); return; }
     notice("SETTINGS NOT SAVED");
     if (result == SERVICE_SAVED) {
         settings_from_service(service_get());
@@ -1160,6 +1162,37 @@ static void update_setup(vp_input *in)
     notice(save_settings() ? "SETTINGS SAVED" : "CANNOT SAVE SETTINGS");
     sound_volumes(G.volume, G.effects_volume, G.engine_volume, G.music_volume);
     enter_attract(PAGE_TITLE);
+}
+
+/* FACTORY RESET AND RESTART: save/settings.ini and the high scores go,
+ * every setting is as game.ini has it (load_settings), the table as the
+ * game first had it, and the game begins again with the first start's
+ * setup, as on a new cabinet. */
+
+static void factory_reset(void)
+{
+    char path[1024];
+    remove(settings_path(path, sizeof path));
+    remove(vp_hiscore_path());
+    G.setup_done = 0;
+    G.invincible = 0;
+    G.continues = 1;
+    G.view_ini = VIEW_HUD;
+    G.control_stick = 0;
+    G.invert_pitch = 0;
+    G.free_play = 0;
+    G.attract_sound = 0;
+    G.start_level = G.demo_era = 0;
+    load_settings();
+    G.credits.free_play = G.free_play;
+    default_scores();
+    G.table_count = vp_hiscore_load(G.table);
+    G.hiscore = G.table_count > 0 ? G.table[0].score : 0;
+    G.rank = -1;
+    sound_volumes(G.volume, G.effects_volume, G.engine_volume, G.music_volume);
+    fprintf(stderr, "Time Pilot 3D: factory reset\n");
+    enter_attract(PAGE_TITLE);
+    open_setup();
 }
 
 /* --- init, the step, the self test ------------------------------------------------- */

@@ -22,14 +22,14 @@
 enum {
     R_VOLUME, R_EFFECTS, R_ENGINE, R_MUSIC,
     R_LIVES, R_DIFFICULTY, R_BONUS, R_KILLS, R_START, R_FREE, R_ATTRACT, R_RESET, R_LEVELSEL, R_INVINCIBLE, R_CONTINUE,
-    R_SENS, R_DEADZONE, R_INVERT, R_VIEW, R_AIM, R_FIRE, R_FASTER, R_SLOWER, R_REAR, R_MENUKEY, R_SETUP,
+    R_SENS, R_DEADZONE, R_INVERT, R_VIEW, R_AIM, R_FIRE, R_FASTER, R_SLOWER, R_REAR, R_MENUKEY, R_SETUP, R_FACTORY,
     R_SOLID, R_PICTURE, R_BEAM, R_MONITOR, R_LAYOUT, R_CONTROL, R_SAVE, R_CANCEL, R_GAME, R_CONTROLS, R_VIDEO, R_BACK,
     R_BRIGHT, R_BRIGHT_LAST = R_BRIGHT + SERVICE_BRIGHTS - 1, ROWS
 };
 
 enum { PAGE_MAIN, PAGE_GAME, PAGE_CONTROLS, PAGE_VIDEO, PAGE_MONITOR };
 static const int main_rows[] = {
-    R_GAME, R_CONTROLS, R_VIDEO, R_MONITOR, R_VOLUME, R_EFFECTS, R_ENGINE, R_MUSIC, R_CANCEL, R_SAVE
+    R_GAME, R_CONTROLS, R_VIDEO, R_MONITOR, R_VOLUME, R_EFFECTS, R_ENGINE, R_MUSIC, R_FACTORY, R_CANCEL, R_SAVE
 };
 static const int monitor_rows[] = { R_PICTURE, R_BEAM, R_BACK };
 static const int game_rows[] = {
@@ -59,7 +59,7 @@ static const char *const row_names[ROWS] = {
     "PLANES PER GAME", "DIFFICULTY", "FIRST BONUS PLANE", "ENEMIES PER ERA", "START IN ERA", "FREE PLAY", "ATTRACT SOUND",
     "RESET HIGH SCORES", "LEVEL SELECT", "INVINCIBLE", "CONTINUE",
     "YOKE SENSITIVITY", "YOKE DEAD ZONE", "INVERT PITCH", "VIEW AT START", "AIM ASSIST",
-    "FIRE BUTTON", "FASTER BUTTON", "SLOWER BUTTON", "LOOK BACK BUTTON", "MENU BUTTON", "CONTROL SETUP",
+    "FIRE BUTTON", "FASTER BUTTON", "SLOWER BUTTON", "LOOK BACK BUTTON", "MENU BUTTON", "CONTROL SETUP", "FACTORY RESET AND RESTART",
     "SOLID OBJECTS", "PICTURE SIZE", "BEAM LIMIT", "MONITOR", "WHERE THE BUTTONS ARE", "FLOWN WITH", "SAVE", "CANCEL", "GAME", "CONTROLS", "VIDEO", "BACK",
     "GROUND, BUILDINGS", "CLOUD BRIGHTNESS", "ENEMY BRIGHTNESS", "PLANE, COCKPIT",
     "SHOT BRIGHTNESS", "EFFECT BRIGHTNESS", "TEXT BRIGHTNESS", "TITLE BRIGHTNESS"
@@ -81,6 +81,7 @@ static struct {
     int   engine;                       /* the engine is running for its row */
     int   music;                        /* and the music for its */
     int   tab;
+    int   factory_armed;                /* FACTORY RESET taken once: the next START does it */
     unsigned frames;
 } S;
 
@@ -375,11 +376,18 @@ int service_update(vp_input *in, int hotkey)
         if (S.cursor >= count) S.cursor = count - 1;
         S.row = rows[S.cursor];
         S.preview = 0;
+        S.factory_armed = 0;
     }
     if (!accept) return SERVICE_OPEN;
     if (S.row == R_SAVE) return SERVICE_SAVED;
     if (S.row == R_CANCEL) return SERVICE_CANCELLED;
     if (S.row == R_SETUP) return SERVICE_SETUP;
+    if (S.row == R_FACTORY) {           /* asked twice: it cannot be undone */
+        if (S.factory_armed) return SERVICE_FACTORY;
+        S.factory_armed = 1;
+        sound_fx(FX_WARN);
+        return SERVICE_OPEN;
+    }
     sound_fx(FX_TINK);
     if (S.row == R_GAME) turn_to(PAGE_GAME);
     else if (S.row == R_CONTROLS) turn_to(PAGE_CONTROLS);
@@ -467,7 +475,10 @@ void service_draw(void)
         if (here) text(">", 180, y, 100, VP_TEXT_RIGHT, 255, 255, 0);
         text(row_names[row], 240, y, 100, VP_TEXT_LEFT, r, g, b);
         if (set) { r = 255; g = 255; b = 0; }
-        if (row == R_SETUP) {
+        if (row == R_FACTORY) {             /* the name is long: its word further right */
+            if (S.factory_armed && here) { if ((S.frames / 12) & 1) text("SURE?", 3050, y, 100, VP_TEXT_LEFT, 255, 60, 60); }
+            else text("START", 3050, y, 100, VP_TEXT_LEFT, r, g, b);
+        } else if (row == R_SETUP) {
             text("START", 2300, y, 100, VP_TEXT_LEFT, r, g, b);
         } else if (row == R_GAME || row == R_CONTROLS || row == R_VIDEO || row == R_MONITOR) {
             text("OPEN", 2300, y, 100, VP_TEXT_LEFT, r, g, b);
@@ -530,6 +541,10 @@ void service_draw(void)
         if (said) text(said, 2048, 420, 80, VP_TEXT_CENTER, 255, 80, 80);
         if (S.layout_step) { one = "PRESS THE YOKE'S BUTTON FOR EACH PLACE"; two = "START 1 - LEAVE IT AS IT IS"; }
         else if (S.editing) { one = "YOKE, LEFT, RIGHT - SET"; two = "ENTER, START 1 - DONE"; }
+        else if (S.factory_armed && S.row == R_FACTORY) {
+            text("SETTINGS, CONTROLS AND HIGH SCORES ARE ALL DELETED", 2048, 420, 80, VP_TEXT_CENTER, 255, 80, 80);
+            one = "START 1 AGAIN - RESET AND RESTART"; two = "UP, DOWN - KEEP EVERYTHING";
+        }
         else if (S.lay.capturing || is_button(S.row)) vpb_layout_help(&S.lay, &one, &two);
         text(one, 2048, 300, 80, VP_TEXT_CENTER, 0, 150, 0);
         text(two, 2048, 170, 80, VP_TEXT_CENTER, 0, 150, 0);
