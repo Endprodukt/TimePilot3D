@@ -1,0 +1,24 @@
+Time Pilot 3D - PC-Testversion
+==============================
+
+Starten: timepilot3d.exe doppelklicken (Vollbild) oder in einer
+Eingabeaufforderung "timepilot3d.exe --windowed" (im Fenster).
+Beim ersten Start fragt das Spiel, womit gespielt wird (Yoke oder
+Joystick und Tasten) - mit den Pfeiltasten wählen, mit 1 bestätigen.
+
+Tasten
+  Pfeiltasten     steuern (hoch = Nase runter, wie am Steuerhorn)
+  Strg links      Feuer
+  Alt links       schneller
+  Leertaste       langsamer
+  Shift links     nach hinten schauen
+  5               Münze einwerfen
+  1               Start; im Spiel: Ansicht wechseln (HUD, Cockpit, von hinten)
+  F2              Service-Menü (Einstellungen)
+  Esc             beenden
+
+Ein Joystick oder Gamepad geht auch; die Belegung fragt das Spiel beim
+ersten Start ab (oder später im Service-Menü unter CONTROLS).
+
+Einstellungen und Bestenliste landen im Ordner "save" neben dem Programm.
+Alles zurücksetzen: F2, FACTORY RESET AND RESTART, zweimal 1.

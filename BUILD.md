@@ -18,7 +18,7 @@ Tasten am PC (AdvanceMAME-Vorgaben, solange keine `advmame.rc` etwas anderes sag
 
 `VP_STATS=1` gibt einmal pro Sekunde die Kosten eines Bildes aus (Linien, Sprünge, Weglängen). Gemessen am PC im Demo: im Schnitt 550 Linien und 220 Sprünge je Bild, Spitzen bei 1250 Linien und 500 Sprüngen.
 
-PC-Testversion für andere (seit 0.65.0): Das Programm braucht außer Windows nur `SDL2.dll` (alles andere ist eingebaut, geprüft mit `ldd` und einem Start ohne MinGW im Pfad). Ein Ordner `build/TimePilot3D-<version>-PC` mit `timepilot3d.exe`, `SDL2.dll`, `game.ini`, `sounds/`, `music/` und `LIESMICH.txt` (Start, Tasten, Zurücksetzen), gepackt als `build/TimePilot3D-<version>-PC.zip` (rund 12 MB). Ohne `save/`: Die Tester beginnen mit der Einrichtung des ersten Starts.
+PC-Testversion für andere (seit 0.65.0): Das Programm braucht außer Windows nur `SDL2.dll` (alles andere ist eingebaut, geprüft mit `ldd` und einem Start ohne MinGW im Pfad). Ein Ordner `build/TimePilot3D-<version>-PC` mit `timepilot3d.exe`, `SDL2.dll`, `game.ini`, `sounds/`, `music/` und `LIESMICH.txt` (Start, Tasten, Zurücksetzen), gepackt als `build/TimePilot3D-<version>-PC.zip` (rund 12 MB). Ohne `save/`: Die Tester beginnen mit der Einrichtung des ersten Starts. Das macht `sh tools/make_pc.sh` (baut den PC-Build neu und legt Ordner und ZIP in den `build`-Ordner des Projekts selbst, auch aus einem Worktree); `tools/deploy.sh` ruft es nach jedem Aufspielen auf, also gibt es zu jeder Version die PC-Fassung (Regel des Nutzers, 2026-10-21: er prüft am PC mit digitalem Joystick). Die Anleitung dazu liegt als `package/LIESMICH-PC.txt` im Projekt.
 
 ## Raspberry Pi (arm64)
 

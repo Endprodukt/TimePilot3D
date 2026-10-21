@@ -17,6 +17,7 @@ enum { P_CHOOSE, P_YOKE_BUTTONS, P_YOKE_LAYOUT, P_STICK_BUTTONS, P_STICK_LAYOUT 
 
 #define SENS_MIN       25               /* hundredths, as in the service menu */
 #define SENS_MAX       300
+#define STICK_SENS     40               /* the joystick's standard (2026-10-21, tried on the PC with a digital stick); the yoke keeps 1.00 */
 #define REPEAT_DELAY   24               /* a held direction: frames before it repeats, and between */
 #define REPEAT_EVERY   4
 
@@ -104,6 +105,7 @@ static void choose(vp_input *in)
     sound_fx(FX_PICKUP);
     S.now.control_stick = S.choice;
     standard_buttons();
+    if (S.choice) S.sens = STICK_SENS;  /* the stick's standard; the test flight sets it after */
     turn_to(S.choice ? P_STICK_BUTTONS : P_YOKE_BUTTONS);
 }
 

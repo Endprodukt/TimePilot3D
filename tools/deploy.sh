@@ -22,3 +22,5 @@ md5sum build/pi/timepilot3d
 # and the package of what is now on the cabinet, in the project's build
 # folder: every version there (the user's rule, 2026-10-21; make_vpk.sh)
 sh tools/make_vpk.sh | tail -n 2
+# and the PC version of it beside the package, to test on a PC (make_pc.sh)
+sh tools/make_pc.sh
