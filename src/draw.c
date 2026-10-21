@@ -5,7 +5,6 @@
 #include "setup.h"
 
 /* this file's own, in the order below */
-static void board_dot(float x, float y);
 static int flyer_tint(const obj *o);
 static void draw_flyer(const obj *o);
 static void draw_cut(const obj *o, int tint);
@@ -48,7 +47,6 @@ void text(const char *s, float x, float y, float height, int align, int r, int g
     world_text(s, x, y, height, align);
 }
 
-static void board_dot(float x, float y) { world_bline(x, y, x, y); }
 
 void draw_rotors(const obj *o, const vp_xf *body)
 {
@@ -1123,8 +1121,8 @@ static void draw_radar(void)
                 world_bline(rx - 10, rz - 10, rx + 10, rz + 10);
             } else if (!sites[i].spent) {
                 world_rgb(255, 255, 255);
-                world_bline(rx - 20, rz, rx + 20, rz);
-                world_bline(rx, rz - 20, rx, rz + 20);
+                world_bline(rx - 11, rz, rx + 11, rz);
+                world_bline(rx, rz - 11, rx, rz + 11);
             }
         }
     }
@@ -1143,11 +1141,11 @@ static void draw_radar(void)
         if (o->kind == K_BOSS) {
             if ((G.frames / 8) & 1) continue;
             world_rgb(255, 80, 80);
-            world_bline(rx - 45, rz, rx, rz + 45); world_bline(rx, rz + 45, rx + 45, rz);
-            world_bline(rx + 45, rz, rx, rz - 45); world_bline(rx, rz - 45, rx - 45, rz);
-        } else if (o->kind == K_CHUTE) {
+            world_bline(rx - 30, rz, rx, rz + 30); world_bline(rx, rz + 30, rx + 30, rz);
+            world_bline(rx + 30, rz, rx, rz - 30); world_bline(rx, rz - 30, rx - 30, rz);
+        } else if (o->kind == K_CHUTE) {            /* a short stroke, upright: someone hanging */
             world_rgb(255, 255, 255);
-            board_dot(rx, rz);
+            world_bline(rx, rz - 12, rx, rz + 12);
         } else if (o->heavy) {          /* a big one: a square, red */
             world_rgb(255, 60, 30);
             world_bline(rx - 28, rz - 28, rx + 28, rz - 28); world_bline(rx + 28, rz - 28, rx + 28, rz + 28);
@@ -1155,9 +1153,10 @@ static void draw_radar(void)
         } else if (o->form) {           /* a formation: a short stroke, in green */
             world_rgb(120, 255, 120);
             world_bline(rx - 14, rz, rx + 14, rz);
-        } else {
+        } else {                        /* (2026-10-22: a dot could not be followed) a small diamond */
             world_rgb(255, 200, 0);
-            board_dot(rx, rz);
+            world_bline(rx - 14, rz, rx, rz + 14); world_bline(rx, rz + 14, rx + 14, rz);
+            world_bline(rx + 14, rz, rx, rz - 14); world_bline(rx, rz - 14, rx - 14, rz);
         }
     }
 }

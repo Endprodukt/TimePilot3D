@@ -182,9 +182,9 @@ void draw_items_page(int tutorial)
     city_draw_site(CITY_GATE, &gate);
     u = fmodf(t, 4.0f) / 2.5f;                  /* through it in two and a half seconds, then a pause */
     world_level(G.bright[BRIGHT_EFFECTS]);
-    if (u < 0.55f || ((G.frames / 10) & 1)) draw_mystery(vp_xf_point(&gate, vp_v3(0, 17.0f, 0)), 3.0f, t * 2.0f);
+    if (u < 0.55f || ((G.frames / 10) & 1)) draw_mystery(vp_xf_point(&gate, vp_v3(0, GATE_MIDDLE, 0)), 3.0f, t * 2.0f);
     if (u < 1.0f) {
-        vp_vec3 at = vp_xf_point(&gate, vp_v3(0, 17.0f, -90.0f + 180.0f * u));
+        vp_vec3 at = vp_xf_point(&gate, vp_v3(0, GATE_MIDDLE, -90.0f + 180.0f * u));
         vp_xf plane = vp_xf_mul2(world_place(at, gate_turn, 0, 0), vp_xf_scale(0.42f, 0.42f, 0.42f));
         world_level(G.bright[BRIGHT_PLAYER]);
         model_draw(MODEL_PLAYER, &plane, TINT_OWN);

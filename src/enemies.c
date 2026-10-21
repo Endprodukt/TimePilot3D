@@ -587,26 +587,28 @@ static void fight_boomzoom(obj *o, float d, float speed)
 static void fight_hover(obj *o, float d, float speed)
 {
     vp_vec3 right = vp_v3(cosf(o->heading), 0, -sinf(o->heading));
-    if (o->mode == M_EVADE) {                   /* up or down, fast, and aside */
-        steer_toward(o, G.p.pos, o->turn * 1.5f, 0.6f);
-        o->speed = 0;
-        o->pos.y += o->side * 38.0f * DT;
-        o->pos = vp_v3_add(o->pos, vp_v3_scale(right, -o->side * 30.0f * DT));
+    /* (2026-10-22: they moved like spaceships - half the sideways and
+     * upward speed of before, and they brake instead of standing at once) */
+    if (o->mode == M_EVADE) {                   /* up or down, and aside */
+        steer_toward(o, G.p.pos, o->turn, 0.6f);
+        o->speed += (0 - o->speed) * 0.05f;
+        o->pos.y += o->side * 19.0f * DT;
+        o->pos = vp_v3_add(o->pos, vp_v3_scale(right, -o->side * 15.0f * DT));
     } else if (!takes_part(o, 0)) {
         /* not its turn: it hangs half a kilometre off, nose on the player,
          * drifting round it, and holds its fire */
         steer_toward(o, G.p.pos, o->turn, 0.5f);
         o->speed += ((d < 440.0f ? -18.0f : d > 540.0f ? speed * 0.7f : 0.0f) - o->speed) * 0.05f;
-        o->pos = vp_v3_add(o->pos, vp_v3_scale(right, o->side * 12.0f * DT));
+        o->pos = vp_v3_add(o->pos, vp_v3_scale(right, o->side * 8.0f * DT));
         fly(o);
         return;
     } else if (d > 330.0f) {
         o->speed = speed;
         steer_toward(o, vp_v3_add(G.p.pos, o->offset), o->turn, 0.5f);
     } else {
-        steer_toward(o, G.p.pos, o->turn * 1.5f, 0.6f);
-        o->speed += ((d < 160.0f ? -22.0f : 8.0f) - o->speed) * 0.05f;
-        o->pos = vp_v3_add(o->pos, vp_v3_scale(right, o->side * 26.0f * DT));
+        steer_toward(o, G.p.pos, o->turn * 1.1f, 0.6f);
+        o->speed += ((d < 160.0f ? -14.0f : 8.0f) - o->speed) * 0.03f;
+        o->pos = vp_v3_add(o->pos, vp_v3_scale(right, o->side * 13.0f * DT));
         o->pos.y += 8.0f * sinf(o->age * 1.3f + o->phase) * DT;
         o->roll += (-o->side * 0.3f - o->roll) * 0.1f;
         if (o->mode_time <= 0) { o->side = -o->side; o->mode_time = 2.0f + frand() * 2.5f; }
@@ -937,7 +939,7 @@ void run_sites(void)
     for (i = 0; i < n; i++) {
         const city_site *s = &sites[i];
         float d = dist3(s->at, G.p.pos);
-        if (s->kind == CITY_GATE && !s->spent && d < 17.0f) {
+        if (s->kind == CITY_GATE && !s->spent && d < GATE_TAKE) {
             city_mark(s->cx, s->cz, CITY_SPENT);
             grant_item(random_item());
         } else if (s->kind == CITY_GUN && d < 520.0f && G.p.pos.y < 420.0f) {

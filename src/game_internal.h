@@ -113,7 +113,7 @@ enum { SHOT_GUN, SHOT_FLAK, SHOT_BOSS, SHOT_HEAVY,
 /* the sky */
 #define SPAWN_NEAR      380.0f
 #define SPAWN_FAR       650.0f
-#define SPAWN_AHEAD     0.75f       /* the share of enemies that come from ahead (spawn_enemy) */
+#define SPAWN_AHEAD     0.6f        /* the share of enemies that come from ahead (spawn_enemy; 0.75 was a lot of them, 2026-10-22) */
 #define DESPAWN         1500.0f
 #define SPAWN_EVERY     0.5f
 #define BOSS_SPAWN_EVERY 3.0f      /* with a boss up, one lost is made good only slowly */

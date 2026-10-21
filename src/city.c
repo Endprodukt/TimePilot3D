@@ -335,13 +335,13 @@ static void plan(building *b, int era)
 /* The special places, the same in every era but for their colours. */
 static void plan_special(building *b, int special)
 {
-    if (special == CITY_GATE) {             /* two arches, 40 wide and 34 high inside, 28 apart */
+    if (special == CITY_GATE) {             /* two arches, 52 wide and 40 high inside, 28 apart (2026-10-22: were 40 by 34 - the frame was hit when clear of it) */
         int k;
         for (k = -1; k <= 1; k += 2) {
             float z = 14.0f * (float)k;
-            add(b, S_BOX, -22, 0, z, 4, 34, 4);
-            add(b, S_BOX, 22, 0, z, 4, 34, 4);
-            add(b, S_BOX, 0, 34, z, 48, 4, 4);
+            add(b, S_BOX, -28, 0, z, 4, 40, 4);
+            add(b, S_BOX, 28, 0, z, 4, 40, 4);
+            add(b, S_BOX, 0, 40, z, 60, 4, 4);
         }
     } else if (special == CITY_DEPOT) {     /* a store with a pointed roof */
         add(b, S_BOX, 0, 0, 0, 26, 18, 26);
@@ -534,7 +534,7 @@ static void site_of(const building *b, city_site *out)
     out->cx = b->cx;
     out->cz = b->cz;
     out->spent = b->spent;
-    out->at = vp_v3(b->x, b->special == CITY_GATE ? 17.0f : b->top, b->z);
+    out->at = vp_v3(b->x, b->special == CITY_GATE ? GATE_MIDDLE : b->top, b->z);
 }
 
 int city_sites(int era, vp_vec3 eye, float reach, city_site *out, int max)

@@ -38,6 +38,8 @@ float city_top(int era, float x, float z, float margin);
  * The game says what has become of one (city_mark); that is forgotten when
  * the era changes (city_reset). */
 enum { CITY_NONE = 0, CITY_GATE, CITY_DEPOT, CITY_GUN };
+#define GATE_MIDDLE 20.0f       /* metres up: the middle of a gate's way through (its city_site `at`) */
+#define GATE_TAKE   22.0f       /* this near that middle, flying through, the item is won */
 enum { CITY_SPENT = 1, CITY_GONE = 2 };     /* a gate flown through; a depot or gun destroyed */
 
 typedef struct city_site {
