@@ -21,7 +21,9 @@
 static float s_reach = REACH;
 
 void city_set_reach(float reach) { s_reach = reach < 250.0f ? 250.0f : reach > REACH ? REACH : reach; }
-#define MAX_PARTS   6
+#define MAX_PARTS   12
+#define FINE_REACH  520.0f     /* a building's small things (add_fine) are drawn this near the eye, */
+#define FINE_FADE   140.0f     /* coming up over this last stretch: from farther they cost beam and show nothing */
 
 /* The unit shapes: 1 wide (x), 1 deep (z), 1 high (y), standing on y = 0. */
 enum { S_BOX, S_BOX_OPEN, S_PYRAMID, S_GABLE, S_HEX, S_COUNT };
@@ -30,6 +32,7 @@ typedef struct part {
     int   shape;
     float x, y, z;              /* its middle on the ground plan, and its foot */
     float sx, sy, sz;           /* its size */
+    int   fine;                 /* a small thing: only near the eye */
 } part;
 
 typedef struct building {
@@ -47,7 +50,7 @@ typedef struct building {
 /* How many cells in a hundred hold a building, and how much bigger than
  * life the era's are drawn: a farmhouse at its true size is a dot from
  * the air. */
-static const int   density[5] = { 22, 24, 22, 58, 30 };      /* per cent of the cells built on (1982 and 2001 thinned for a faulty monitor in 0.31.1 to 0.45.1; back since 2026-10-21) */
+static const int   density[5] = { 52, 54, 40, 45, 33 };      /* per cent of the cells built on: as much as the board takes, measured era by era (2026-11-02; 1982 is at its limit) */
 static const float scale[5]   = { 2.2f, 1.6f, 1.6f, 1.0f, 1.0f };
 
 static vp3d_mesh *s_shape[S_COUNT];
@@ -236,97 +239,204 @@ static void add(building *b, int shape, float x, float y, float z, float sx, flo
     p->shape = shape;
     p->x = x; p->y = y; p->z = z;
     p->sx = sx; p->sy = sy; p->sz = sz;
+    p->fine = 0;
+}
+
+/* The same for a small thing on or beside a building. */
+static void add_fine(building *b, int shape, float x, float y, float z, float sx, float sy, float sz)
+{
+    int n = b->n;
+    add(b, shape, x, y, z, sx, sy, sz);
+    if (b->n > n) b->p[n].fine = 1;
 }
 
 static void plan(building *b, int era)
 {
-    int kind = (int)(hrand() * 4.0f) & 3;
+    int kind = (int)(hrand() * 6.0f) % 6;
     float u = hrand(), v = hrand();
 
     switch (era) {
     case 0:     /* 1910: the countryside */
-        if (kind == 0) {            /* a farmhouse */
+        if (kind == 0) {            /* a farmhouse, its chimney, a shed and a stack of hay */
             add(b, S_BOX, 0, 0, 0, 14, 7, 10);
             add(b, S_GABLE, 0, 7, 0, 14, 5, 10);
-        } else if (kind == 1) {     /* a barn */
+            add_fine(b, S_BOX, 4, 9, 2, 2, 5, 2);
+            add_fine(b, S_BOX, -14, 0, 8, 8, 4, 7);
+            add_fine(b, S_GABLE, -14, 4, 8, 8, 3, 7);
+            add_fine(b, S_PYRAMID, 13, 0, -9, 7, 6, 7);
+        } else if (kind == 1) {     /* a barn with its silo and a lean-to */
             add(b, S_BOX, 0, 0, 0, 16, 9, 24);
             add(b, S_GABLE, 0, 9, 0, 16, 7, 24);
-        } else if (kind == 2) {     /* a church */
+            add_fine(b, S_HEX, 14, 0, -6, 7, 16, 7);
+            add_fine(b, S_PYRAMID, 14, 16, -6, 7, 3, 7);
+            add_fine(b, S_BOX, -12, 0, 0, 8, 5, 14);
+        } else if (kind == 2) {     /* a church, its porch, the yard's wall */
             add(b, S_BOX, 0, 0, -4, 10, 9, 22);
             add(b, S_GABLE, 0, 9, -4, 10, 6, 22);
             add(b, S_BOX, 0, 0, 11, 8, 22, 8);
             add(b, S_PYRAMID, 0, 22, 11, 8, 16, 8);
-        } else {                    /* a windmill */
+            add_fine(b, S_BOX, 0, 0, -18, 5, 5, 6);
+            add_fine(b, S_BOX, -11, 0, -4, 1, 2, 34);
+            add_fine(b, S_BOX, 11, 0, -4, 1, 2, 34);
+        } else if (kind == 3) {     /* a windmill and the miller's house */
             add(b, S_HEX, 0, 0, 0, 9, 20, 9);
             add(b, S_PYRAMID, 0, 20, 0, 10, 6, 10);
             b->mill = 1; b->mill_y = 18; b->mill_z = 6; b->mill_r = 15;
+            add_fine(b, S_BOX, -13, 0, -5, 9, 5, 8);
+            add_fine(b, S_GABLE, -13, 5, -5, 9, 4, 8);
+        } else if (kind == 4) {     /* a hamlet: three houses along a lane */
+            add(b, S_BOX, -13, 0, -10, 9, 5, 12);
+            add(b, S_GABLE, -13, 5, -10, 9, 4, 12);
+            add(b, S_BOX, 13, 0, -2, 9, 6, 12);
+            add(b, S_GABLE, 13, 6, -2, 9, 4, 12);
+            add(b, S_BOX, -11, 0, 11, 10, 5, 10);
+            add(b, S_GABLE, -11, 5, 11, 10, 3, 10);
+            add_fine(b, S_BOX, -11, 7, -8, 1.5f, 3, 1.5f);
+            add_fine(b, S_BOX, 15, 8, -4, 1.5f, 3, 1.5f);
+        } else {                    /* a manor with two round towers */
+            add(b, S_BOX, 0, 0, 0, 26, 11, 12);
+            add(b, S_GABLE, 0, 11, 0, 26, 5, 12);
+            add(b, S_HEX, -14, 0, 0, 8, 16, 8);
+            add(b, S_PYRAMID, -14, 16, 0, 9, 8, 9);
+            add(b, S_HEX, 14, 0, 0, 8, 16, 8);
+            add(b, S_PYRAMID, 14, 16, 0, 9, 8, 9);
+            add_fine(b, S_BOX, 0, 0, 9, 7, 6, 6);
         }
         break;
     case 1:     /* 1940: an airfield, a factory */
-        if (kind == 0) {            /* a hangar */
+        if (kind == 0) {            /* a hangar, its workshop, a mast */
             add(b, S_BOX, 0, 0, 0, 36, 10, 44);
             add(b, S_GABLE, 0, 10, 0, 36, 8, 44);
-        } else if (kind == 1) {     /* a control tower */
+            add_fine(b, S_BOX, 24, 0, 8, 10, 6, 20);
+            add_fine(b, S_BOX, -24, 0, -18, 1, 22, 1);
+        } else if (kind == 1) {     /* a control tower with its aerial and offices */
             add(b, S_BOX, 0, 0, 0, 8, 24, 8);
             add(b, S_BOX, 0, 24, 0, 14, 6, 14);
-        } else if (kind == 2) {     /* a factory with two chimneys */
+            add_fine(b, S_BOX, 0, 30, 0, 1, 10, 1);
+            add_fine(b, S_BOX, 16, 0, 2, 18, 6, 12);
+        } else if (kind == 2) {     /* a factory: two chimneys, a saw-tooth roof */
             add(b, S_BOX, 0, 0, 0, 40, 14, 28);
             add(b, S_BOX, -12, 14, 6, 5, 22, 5);
             add(b, S_BOX, 8, 14, 6, 5, 28, 5);
-        } else {                    /* two barracks */
+            add_fine(b, S_GABLE, -10, 14, -8, 12, 4, 10);
+            add_fine(b, S_GABLE, 8, 14, -8, 12, 4, 10);
+            add_fine(b, S_HEX, 26, 0, -8, 9, 12, 9);
+        } else if (kind == 3) {     /* two barracks and a water tower */
             add(b, S_BOX, -10, 0, 0, 10, 6, 36);
             add(b, S_GABLE, -10, 6, 0, 10, 4, 36);
             add(b, S_BOX, 10, 0, 0, 10, 6, 36);
             add(b, S_GABLE, 10, 6, 0, 10, 4, 36);
+            add_fine(b, S_BOX, 0, 0, 26, 2, 16, 2);
+            add_fine(b, S_HEX, 0, 16, 26, 9, 6, 9);
+        } else if (kind == 4) {     /* a tank farm */
+            add(b, S_HEX, -14, 0, -8, 16, 11, 16);
+            add(b, S_HEX, 8, 0, -10, 13, 9, 13);
+            add(b, S_HEX, -2, 0, 12, 18, 12, 18);
+            add_fine(b, S_BOX, 22, 0, 12, 10, 4, 8);
+        } else {                    /* a flak tower with a gun at each corner */
+            add(b, S_BOX, 0, 0, 0, 24, 26, 24);
+            add(b, S_BOX, 0, 26, 0, 16, 4, 16);
+            add_fine(b, S_BOX, -10, 26, -10, 3, 3, 3);
+            add_fine(b, S_BOX, 10, 26, -10, 3, 3, 3);
+            add_fine(b, S_BOX, -10, 26, 10, 3, 3, 3);
+            add_fine(b, S_BOX, 10, 26, 10, 3, 3, 3);
         }
         break;
     case 2:     /* 1970: a base in the field */
-        if (kind == 0) {            /* a radio mast */
+        if (kind == 0) {            /* a radio mast and its hut */
             add(b, S_BOX, 0, 0, 0, 12, 5, 12);
             add(b, S_PYRAMID, 0, 5, 0, 7, 70 + 30 * u, 7);
-        } else if (kind == 1) {     /* a bunker */
+            add_fine(b, S_BOX, 14, 0, 6, 8, 4, 10);
+        } else if (kind == 1) {     /* a bunker with a radar dome */
             add(b, S_BOX, 0, 0, 0, 30, 6, 24);
             add(b, S_PYRAMID, 0, 6, 0, 30, 5, 24);
-        } else if (kind == 2) {     /* fuel tanks */
+            add_fine(b, S_HEX, 20, 0, -12, 8, 8, 8);
+            add_fine(b, S_PYRAMID, 20, 8, -12, 9, 5, 9);
+        } else if (kind == 2) {     /* fuel tanks and their pipe */
             add(b, S_HEX, -12, 0, 0, 18, 12, 18);
             add(b, S_HEX, 12, 0, 0, 18, 12, 18);
-        } else {                    /* a watch tower beside a block */
+            add_fine(b, S_BOX, 0, 2, 0, 8, 1, 1);
+            add_fine(b, S_HEX, 0, 0, 18, 10, 8, 10);
+        } else if (kind == 3) {     /* a watch tower beside a block */
             add(b, S_BOX, -14, 0, 0, 4, 20, 4);
             add(b, S_BOX, -14, 20, 0, 10, 5, 10);
             add(b, S_PYRAMID, -14, 25, 0, 10, 4, 10);
             add(b, S_BOX, 10, 0, 0, 20, 14 + 26 * u, 14);
+            add_fine(b, S_BOX, 10, 14 + 26 * u, 0, 8, 3, 6);
+        } else if (kind == 4) {     /* a helicopter pad, two sheds */
+            add(b, S_BOX, 0, 0, 0, 34, 1, 34);
+            add(b, S_BOX, -24, 0, -8, 12, 8, 20);
+            add(b, S_GABLE, -24, 8, -8, 12, 4, 20);
+            add_fine(b, S_BOX, 24, 0, 8, 10, 6, 14);
+            add_fine(b, S_BOX, 0, 1, -8, 12, 0.5f, 1);
+            add_fine(b, S_BOX, 0, 1, 8, 12, 0.5f, 1);
+        } else {                    /* a radar station: a block, a tower, its dish on top */
+            add(b, S_BOX, 0, 0, 0, 22, 8, 16);
+            add(b, S_HEX, 0, 8, 0, 8, 16, 8);
+            add(b, S_PYRAMID, 0, 24, 0, 16, 5, 16);
+            add_fine(b, S_BOX, 16, 0, 0, 8, 5, 8);
         }
         break;
     case 3: {   /* 1982: a city */
         float w = 30 + 22 * u, d = 30 + 22 * v, h = 55 + 115 * hrand();
-        if (kind == 0) {            /* a tower */
+        if (kind == 0) {            /* a tower, the machines on its roof */
             add(b, S_BOX, 0, 0, 0, w, h, d);
+            add_fine(b, S_BOX, 0, h, 0, w * 0.4f, 5, d * 0.4f);
         } else if (kind == 1) {     /* a tower stepped back, with a mast */
             add(b, S_BOX, 0, 0, 0, w, h * 0.6f, d);
             add(b, S_BOX, 0, h * 0.6f, 0, w * 0.6f, h * 0.4f, d * 0.6f);
             add(b, S_PYRAMID, 0, h, 0, 3, 26, 3);
-        } else if (kind == 2) {     /* twins */
+        } else if (kind == 2) {     /* twins and the bridge between them */
             add(b, S_BOX, -16, 0, 0, 22, h, 26);
             add(b, S_BOX, 16, 0, 0, 22, h * 0.8f, 26);
-        } else {                    /* a wide low block */
-            add(b, S_BOX, 0, 0, 0, 64, 22 + 14 * u, 60);
+            add_fine(b, S_BOX, 0, h * 0.5f, 0, 10, 4, 6);
+        } else if (kind == 3) {     /* a wide low block, things on its roof */
+            float top = 22 + 14 * u;
+            add(b, S_BOX, 0, 0, 0, 64, top, 60);
+            add_fine(b, S_BOX, -16, top, -14, 14, 5, 12);
+            add_fine(b, S_BOX, 16, top, 14, 18, 7, 14);
+            add_fine(b, S_HEX, 18, top, -16, 8, 6, 8);
+        } else if (kind == 4) {     /* three steps, each narrower */
+            add(b, S_BOX, 0, 0, 0, w, h * 0.45f, d);
+            add(b, S_BOX, 0, h * 0.45f, 0, w * 0.72f, h * 0.3f, d * 0.72f);
+            add(b, S_BOX, 0, h * 0.75f, 0, w * 0.45f, h * 0.25f, d * 0.45f);
+        } else {                    /* a tower on a broad foot */
+            add(b, S_BOX, 0, 0, 0, w + 26, 14, d + 26);
+            add(b, S_BOX, 0, 14, 0, w * 0.7f, h, d * 0.7f);
+            add_fine(b, S_PYRAMID, 0, 14 + h, 0, 2, 16, 2);
         }
         break;
     }
     default:    /* 2001: what the future built */
-        if (kind == 0) {            /* a spire */
+        if (kind == 0) {            /* a spire on a ring */
             add(b, S_HEX, 0, 0, 0, 40, 8, 40);
             add(b, S_PYRAMID, 0, 8, 0, 24, 140 + 70 * u, 24);
-        } else if (kind == 1) {     /* a dome */
+            add_fine(b, S_HEX, 0, 40, 0, 18, 4, 18);
+        } else if (kind == 1) {     /* a dome and its lock */
             add(b, S_HEX, 0, 0, 0, 64, 14, 64);
             add(b, S_PYRAMID, 0, 14, 0, 55, 30, 55);
+            add_fine(b, S_BOX, 36, 0, 0, 14, 8, 10);
         } else if (kind == 2) {     /* a tower with a deck on top */
             float h = 90 + 50 * u;
             add(b, S_HEX, 0, 0, 0, 14, h, 14);
             add(b, S_HEX, 0, h, 0, 44, 9, 44);
             add(b, S_PYRAMID, 0, h + 9, 0, 38, 14, 38);
-        } else {                    /* a pyramid */
+            add_fine(b, S_HEX, 0, h * 0.5f, 0, 24, 4, 24);
+        } else if (kind == 3) {     /* a pyramid, a small one beside it */
             add(b, S_PYRAMID, 0, 0, 0, 78, 50 + 20 * u, 78);
+            add_fine(b, S_PYRAMID, 48, 0, 30, 20, 16, 20);
+        } else if (kind == 4) {     /* two spires and the walk between them */
+            float h = 80 + 50 * u;
+            add(b, S_HEX, -20, 0, 0, 14, h, 14);
+            add(b, S_PYRAMID, -20, h, 0, 14, 24, 14);
+            add(b, S_HEX, 20, 0, 0, 14, h * 0.8f, 14);
+            add(b, S_PYRAMID, 20, h * 0.8f, 0, 14, 24, 14);
+            add_fine(b, S_BOX, 0, h * 0.5f, 0, 28, 2, 4);
+        } else {                    /* a stack of discs, each smaller */
+            add(b, S_HEX, 0, 0, 0, 60, 12, 60);
+            add(b, S_HEX, 0, 12, 0, 44, 14, 44);
+            add(b, S_HEX, 0, 26, 0, 28, 20, 28);
+            add_fine(b, S_PYRAMID, 0, 46, 0, 8, 30, 8);
         }
         break;
     }
@@ -436,6 +546,7 @@ void city_draw(int era, vp_vec3 eye, float time, float grow)
             if (fabsf(c.x) > 0.8f * c.z + b.hx + b.hz + 60.0f) continue;
             for (i = 0; i < b.n; i++) {
                 const part *p = &b.p[i];
+                float k = lit;
                 static const unsigned char special_colour[4][3] = {
                     { 0, 0, 0 }, { 255, 170, 40 }, { 255, 255, 255 }, { 200, 90, 90 }
                 };
@@ -444,7 +555,12 @@ void city_draw(int era, vp_vec3 eye, float time, float grow)
                                                       : p->shape == S_HEX ? 4 : b.shade];
                 vp_xf place = vp_xf_mul2(vp_xf_translate(b.x + p->x, p->y * grow, b.z + p->z),
                                          vp_xf_scale(p->sx, p->sy * grow, p->sz));
-                world_rgb((int)((float)col[0] * lit), (int)((float)col[1] * lit), (int)((float)col[2] * lit));
+                if (p->fine) {          /* only near; it comes up out of the dark as the rest does */
+                    float near = (FINE_REACH - sqrtf(dx * dx + dz * dz)) / FINE_FADE;
+                    if (near <= 0.04f) continue;
+                    if (near < k) k = near;
+                }
+                world_rgb((int)((float)col[0] * k), (int)((float)col[1] * k), (int)((float)col[2] * k));
                 if (world_solid()) shape_solid(p->shape, &place); else world_mesh(s_shape[p->shape], &place);
             }
             if (b.mill) {           /* four sails, turning */

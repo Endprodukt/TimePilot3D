@@ -14,7 +14,7 @@ build/pc/timepilot3d.exe --windowed            # 4:3
 build/pc/timepilot3d.exe --windowed --vertical # 3:4
 ```
 
-Tasten am PC (AdvanceMAME-Vorgaben, solange keine `advmame.rc` etwas anderes sagt): Pfeiltasten steuern (hoch = Yoke nach vorn = Sturzflug, siehe `invert_pitch`), Strg links = Feuer, Alt links = schneller, Leertaste = langsamer, Shift links = Blick nach hinten, 5 = Münze, 1 = Start und im Spiel Ansicht wechseln, F2 = Service-Menü, Esc = Ende. Ein Joystick wird als Yoke gelesen (`p1_stickx`, `p1_sticky`).
+Tasten am PC (AdvanceMAME-Vorgaben, solange keine `advmame.rc` etwas anderes sagt): Pfeiltasten steuern (hoch = Yoke nach vorn = Sturzflug, siehe `invert_pitch`), Strg links = Feuer, Alt links = schneller, Leertaste = langsamer, Shift links = Blick nach hinten, 5 = Münze, 1 = Start und im Spiel Ansicht wechseln, F2 oder Tab = Service-Menü (nach dem Schließen beginnt das Spiel neu), Esc = Ende. Ein Joystick wird als Yoke gelesen (`p1_stickx`, `p1_sticky`).
 
 `VP_STATS=1` gibt einmal pro Sekunde die Kosten eines Bildes aus (Linien, Sprünge, Weglängen). Gemessen am PC im Demo: im Schnitt 550 Linien und 220 Sprünge je Bild, Spitzen bei 1250 Linien und 500 Sprüngen.
 

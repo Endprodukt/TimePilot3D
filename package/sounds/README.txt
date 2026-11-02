@@ -1,4 +1,5 @@
-Time Pilot 3D - recordings that replace the synthesized effects.
+Time Pilot 3D by Oliver Carell (Endprodukt) - recordings that replace the
+synthesized effects.
 
 A WAV file here with one of these names is played instead of the sound the
 game makes itself (mono or stereo, 16 bit, any rate; keep them short and

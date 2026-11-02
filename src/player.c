@@ -160,7 +160,7 @@ static int fire_missile(void)
     m->speed = 300.0f;
     m->turn = 2.8f;
     m->life = 4.0f;
-    sound_fx(FX_MISSILE);
+    sound_fx_ex(FX_MISSILE, 2.0f, 1.0f);    /* our own, from the item: twice as loud as the enemies' launch */
     return 1;
 }
 

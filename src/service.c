@@ -96,8 +96,8 @@ static const int *page_rows(int *count)
 }
 
 /* What opens the menu: F2 (the cabinet's key for every game's menu, never
- * laid out - vpbind.c) always, so that nobody is locked out, and whatever
- * MENU BUTTON has besides. */
+ * laid out - vpbind.c) and TAB always, so that nobody is locked out, and
+ * whatever MENU BUTTON has besides. */
 static char s_menu_key[128] = "key_F2";
 
 void service_menu_key(const char *controls)
@@ -107,10 +107,12 @@ void service_menu_key(const char *controls)
 
 int service_hotkey(void)
 {
+    static int reserved;
     int tab, hit;
 
+    if (!reserved) { vpb_reserve_key(SDL_SCANCODE_TAB); reserved = 1; }     /* never laid out either */
     vpb_update();
-    tab = vpb_key_held(SDL_SCANCODE_F2) || vpb_held(s_menu_key);
+    tab = vpb_key_held(SDL_SCANCODE_F2) || vpb_key_held(SDL_SCANCODE_TAB) || vpb_held(s_menu_key);
     hit = tab && !S.tab;
 
     S.tab = tab;
@@ -525,6 +527,7 @@ void service_draw(void)
             float size = 100.0f, room = 4000.0f - 2300.0f;
             vpb_spelled(laid_of(row, NULL), all, sizeof all);
             if (row == R_MENUKEY && strcmp(laid_of(row, NULL), "key_F2")) strncat(all, " + F2", sizeof all - strlen(all) - 1);
+            if (row == R_MENUKEY) strncat(all, " + TAB", sizeof all - strlen(all) - 1);
             if ((float)strlen(all) * size * 1.05f > room) size = room / ((float)strlen(all) * 1.05f);
             text(all, 2300, y, size, VP_TEXT_LEFT, r, g, b);
         }
@@ -534,6 +537,7 @@ void service_draw(void)
         else text("CANCEL", 1400, 620, 120, VP_TEXT_CENTER, 200, 60, 60);
         if (S.row == R_SAVE) text("SAVE", 2700, 600, 170, VP_TEXT_CENTER, 255, 255, 255);
         else text("SAVE", 2700, 620, 120, VP_TEXT_CENTER, 0, 200, 0);
+        text(S.now.version, 3935, 120, 60, VP_TEXT_RIGHT, 90, 90, 90);        /* which build this is */
     }
     {
         const char *said = vpb_layout_said(&S.lay);

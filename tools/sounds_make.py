@@ -31,9 +31,9 @@ SOURCES = [
     ("portal",        322059, 0.0,      0,    3.8,  0.02,  0.8,     0,    0.30, 1.0),
     ("warp",          454683, 1.0,      0,    14.0, 0.4,   1.2,     0,    0.22, 1.0),
     ("whoosh",        264777, "peak",   1.1,  1.7,  0.1,   0.35,    0,    0.32, 1.0),
-    ("shot",          531861, "onset",  0,    0.45, 0.0,   0.25,    0,    0.34, 1.0),   # a heavy blaster: synth, shotgun, kick (was 414888, too thin); a plasma zap on top (ZAP)
-    ("shot_2",        531861, "onset",  0,    0.45, 0.0,   0.25,    0,    0.34, 1.0),
-    ("shot_3",        531861, "onset",  0,    0.45, 0.0,   0.25,    0,    0.34, 1.0),
+    ("shot",          466831, 0.03,     0,    0.36, 0.0,   0.15,    0,    0.34, 1.0),   # retro laser shots, three of the recording's five (was 531861 with a plasma zap)
+    ("shot_2",        466831, 0.67,     0,    0.45, 0.0,   0.2,     0,    0.34, 1.0),
+    ("shot_3",        466831, 2.78,     0,    0.45, 0.0,   0.2,     0,    0.34, 1.0),
     ("enemy_shot",    361471, "onset",  0,    0.55, 0.0,   0.25,    0,    0.25, 1.0),
     ("explode",       235968, "onset",  0,    2.3,  0.0,   0.9,     0,    0.36, 1.0),
     ("big_explode",   523365, "onset",  0,    4.5,  0.0,   1.6,     0,    0.40, 1.0),
@@ -96,9 +96,6 @@ LAYER = {
 # The sounds that get a plasma zap made here laid over the recording, and
 # the zap's make: (start Hz, end Hz, fall in seconds, FM ratio, seed).
 ZAP = {
-    "shot":   (2600.0, 170.0, 0.20, 1.50, 1),
-    "shot_2": (2300.0, 150.0, 0.23, 1.41, 2),
-    "shot_3": (2900.0, 190.0, 0.18, 1.62, 3),
 }
 
 def lowpass(a, hz):

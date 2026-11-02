@@ -42,6 +42,7 @@ typedef struct service_settings {
     int   aim_assist;                   /* 0..100 */
     char  button[SERVICE_BUTTONS][128]; /* vpbind.h's controls, '+' between several */
     char  menu_key[128];                /* what opens this menu besides F2 (vpbind.h's controls) */
+    char  version[16];                  /* which build this is, shown on the main page */
     int   control_stick;                /* 0 the yoke, 1 a stick and buttons */
     int   yoke_layout[4];               /* the yoke's button numbers: right trigger, left trigger, right thumb, left thumb */
     /* sound and picture */
@@ -69,11 +70,11 @@ enum { SERVICE_OPEN = 0, SERVICE_SAVED, SERVICE_CANCELLED, SERVICE_SETUP, SERVIC
 const char *service_standard(const service_settings *v, int b);
 
 /* Once every game step, menu open or not: 1 when the menu's key has just
- * been pressed - F2 always, and whatever MENU BUTTON has (service_menu_key).
+ * been pressed - F2 and TAB always, and whatever MENU BUTTON has (service_menu_key).
  * (It also reads every control for the step: vpb_update.) */
 int service_hotkey(void);
 
-/* What opens the menu besides F2 (vpbind.h's controls; "key_F2" alone is
+/* What opens the menu besides F2 and TAB (vpbind.h's controls; "key_F2" alone is
  * the standard). */
 void service_menu_key(const char *controls);
 

@@ -1,6 +1,8 @@
 Time Pilot 3D - PC-Testversion
 ==============================
 
+Von Oliver Carell (Endprodukt)
+
 Starten: timepilot3d.exe doppelklicken (Vollbild) oder in einer
 Eingabeaufforderung "timepilot3d.exe --windowed" (im Fenster).
 Beim ersten Start fragt das Spiel, womit gespielt wird (Yoke oder
@@ -14,7 +16,7 @@ Tasten
   Shift links     nach hinten schauen
   5               Münze einwerfen
   1               Start; im Spiel: Ansicht wechseln (HUD, Cockpit, von hinten)
-  F2              Service-Menü (Einstellungen)
+  F2 oder Tab     Service-Menü (Einstellungen); danach beginnt das Spiel neu
   Esc             beenden
 
 Ein Joystick oder Gamepad geht auch; die Belegung fragt das Spiel beim

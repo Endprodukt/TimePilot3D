@@ -978,6 +978,7 @@ static void settings_to_service(service_settings *v)
 {
     int i;
     memset(v, 0, sizeof *v);
+    snprintf(v->version, sizeof v->version, "%s", G.version);
     v->lives            = G.start_lives;
     v->difficulty       = G.difficulty;
     v->bonus_plane      = G.bonus_plane;

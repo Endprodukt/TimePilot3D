@@ -65,7 +65,7 @@ void draw_title(void)
         text(eras[i].year, CX + ((float)i - 2.0f) * 620.0f, 880, i == to ? 120 : 95, VP_TEXT_CENTER,
              (int)(c[0] * k), (int)(c[1] * k), (int)(c[2] * k));
     }
-    text(G.version, 3935, 120, 60, VP_TEXT_RIGHT, 90, 90, 90);        /* which build this is */
+    text("BY ENDPRODUKT", 65, 120, 60, VP_TEXT_LEFT, 90, 90, 90);     /* whose it is (which build: the service menu) */
     draw_coin_line();
 }
 

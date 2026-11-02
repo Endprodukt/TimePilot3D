@@ -11,7 +11,8 @@
  *   coin1 / coin2           a credit
  *   start1                  start; in a game: cockpit / chase view
  *   start2                  start for two players taking turns (two credits)
- *   F2                      the service menu (settings; more in CONTROLS, MENU BUTTON)
+ *   F2 / Tab                the service menu (settings; more in CONTROLS, MENU BUTTON);
+ *                           closed again, the game begins anew from its title
  */
 #include <vectorpie/vp.h>
 
