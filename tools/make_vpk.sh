@@ -10,7 +10,7 @@ stage="$root/build/pkg/timepilot3d"
 [ -f "$root/build/pi/timepilot3d" ] || { echo "make_vpk: no Pi build in build/pi" >&2; exit 1; }
 rm -rf "$root/build/pkg"
 mkdir -p "$stage"
-cp "$root/build/pi/timepilot3d" "$root/package/game.ini" "$root/package/LIESMICH.txt" "$stage/"
+cp "$root/build/pi/timepilot3d" "$root/package/game.ini" "$root/package/README.txt" "$stage/"
 [ -f "$root/package/marquee.png" ] && cp "$root/package/marquee.png" "$stage/"
 if ls "$root"/package/sounds/*.wav > /dev/null 2>&1; then mkdir -p "$stage/sounds" && cp "$root"/package/sounds/*.wav "$stage/sounds/"; fi
 if ls "$root"/package/music/*.wav > /dev/null 2>&1; then mkdir -p "$stage/music" && cp "$root"/package/music/*.wav "$stage/music/"; fi
