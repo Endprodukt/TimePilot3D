@@ -9,7 +9,7 @@
  * stage of its fight (debug_select in game.c; drawn in draw.c). The
  * service menu's LEVEL SELECT turns it off and on while it is built in.
  * Set it to 0 before the game is let out. */
-#define DEBUG_LEVEL_SELECT 1
+#define DEBUG_LEVEL_SELECT 0
 
 /* The controls a player can lay out, in game.ini's order. */
 enum { SERVICE_FIRE, SERVICE_FASTER, SERVICE_SLOWER, SERVICE_REAR, SERVICE_BUTTONS };

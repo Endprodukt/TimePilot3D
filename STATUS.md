@@ -1,6 +1,6 @@
 # Status
 
-Stand: 2026-11-02 (Version 0.74.0)
+Stand: 2026-11-05 (Version 0.74.1)
 
 ## Ziel
 
