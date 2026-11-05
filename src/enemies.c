@@ -143,7 +143,7 @@ static void spawn_boss(void)
     const struct era *e = era();
     obj *o = new_obj(K_BOSS);
     float bearing = G.p.heading + (frand() < 0.5f ? -0.5f : 0.5f);      /* ahead, to one side */
-    int one_hit = G.cheat_kills > G.kills_per_era;                    /* the testing aid: it falls to one hit */
+    int one_hit = G.cheat_kills > kills_needed();                    /* the testing aid: it falls to one hit */
 
     if (!o) return;
     o->model = e->boss_model;
@@ -788,7 +788,7 @@ void spawn_escort(const obj *boss, int k)
     o->escort = k + 1;
     o->phase = PI2 * (float)k / 4.0f;
     o->pos = vp_v3_add(boss->pos, vp_v3(sinf(o->phase) * 90.0f, 10.0f, cosf(o->phase) * 90.0f));
-    o->hp = 3;
+    o->hp = 4;
     o->turn = 2.0f;
     o->timer = 2.0f + 0.7f * (float)k;
     o->side = k & 1 ? 1.0f : -1.0f;
@@ -928,6 +928,14 @@ void update_missile(obj *o)
  * enough, in its own rhythm, and in the eras that have them now and then
  * sends a missile up instead. */
 
+/* Flak: aimed where the plane will be, so flying straight over a gun is the way to be hit. */
+void gun_flak(vp_vec3 from)
+{
+    float speed = era()->bullet_speed * 1.2f;
+    vp_vec3 aim = vp_v3_add(G.p.pos, vp_v3_scale(player_velocity(), dist3(from, G.p.pos) / (speed * hard()->bullets) * 0.8f));
+    shoot(from, vp_v3_normalize(vp_v3_sub(aim, from)), speed, DMG_BULLET, SHOT_FLAK);
+}
+
 void run_sites(void)
 {
     const struct era *e = era();
@@ -951,11 +959,7 @@ void run_sites(void)
                 launch_missile_from(vp_v3_add(s->at, vp_v3(0, 4.0f, 0)),
                                     atan2f(G.p.pos.x - s->at.x, G.p.pos.z - s->at.z), 1.2f);
             } else {
-                /* flak: aimed where the plane will be, so flying straight over a gun is the way to be hit */
-                float speed = e->bullet_speed * 1.2f;
-                vp_vec3 from = vp_v3_add(s->at, vp_v3(0, 3.0f, 0));
-                vp_vec3 aim = vp_v3_add(G.p.pos, vp_v3_scale(player_velocity(), d / (speed * hard()->bullets) * 0.8f));
-                shoot(from, vp_v3_normalize(vp_v3_sub(aim, from)), speed, DMG_BULLET, SHOT_FLAK);
+                gun_flak(vp_v3_add(s->at, vp_v3(0, 3.0f, 0)));
             }
         }
     }
@@ -965,13 +969,14 @@ void run_sites(void)
  * and now and then a formation crossing. */
 
 /* How many hunt the player at once: the era's number, more each time
- * round and on the harder settings; with a boss up, a third of that - the
- * boss is the fight, the others only keep it from being a duel. */
+ * round and on the harder settings; with a boss up, half of that - the
+ * boss is the fight, but it is not to be shot at in peace (2026-11-02:
+ * a third left it too easy to hold on it). */
 static int hunters_wanted(void)
 {
     int want = era()->count + G.loop + hard()->count;
     if (want < 3) want = 3;
-    if (G.boss_alive) want = (want + 2) / 3;
+    if (G.boss_alive) want = (want + 1) / 2;
     if (G.boss_alive && boss_stage()->parts == 0) want = 0;     /* its escort is the fight, and it is not to be lost in a swarm */
     return want;
 }
@@ -1004,6 +1009,12 @@ void run_spawning(void)
     int want = hunters_wanted(), hunters, formation;
 
     if (G.state == WARP) return;
+    /* Half a minute in and no item taken yet: they are there. Said once a game. */
+    if (!G.item_hint && !G.demo && !G.selftest && !G.practice && G.state == PLAYING && !G.boss_called && G.level_time > 30.0f) {
+        G.item_hint = 1;
+        G.hint_time = 6.0f;
+        sound_fx(FX_PICKUP);
+    }
     missile_clock();
     /* The boss shot down: once the last of its wreck has burst, the way
      * through time opens. Nothing more comes meanwhile. */
@@ -1024,6 +1035,6 @@ void run_spawning(void)
     }
     G.spawn_timer -= DT;
     if (G.spawn_timer > 0) return;
-    if (G.kills >= G.kills_per_era && !G.boss_called) { spawn_boss(); G.spawn_timer = 2.0f; return; }
+    if (G.kills >= kills_needed() && !G.boss_called) { spawn_boss(); G.spawn_timer = 2.0f; return; }
     if (hunters < want) { spawn_enemy(); G.spawn_timer = G.boss_alive ? BOSS_SPAWN_EVERY : SPAWN_EVERY; }
 }

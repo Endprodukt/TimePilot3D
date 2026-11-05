@@ -55,7 +55,8 @@
  *   2001 Mothership
  *     1 it hangs over one place behind a shield no shot goes through.
  *       Three stations on the ground feed the shield, each with a beam up
- *       to it: down there, under its fire, they have to be destroyed.
+ *       to it, each guarded by two flak guns: down there, under their
+ *       fire and its own, they have to be destroyed.
  *     > the shield goes out, and the saucer unfolds into a robot
  *     2 the robot turns to face the player wherever it goes: rapid fire
  *       from both arms in turn, its two fists thrown as homing missiles,
@@ -101,7 +102,7 @@ const struct boss bosses[ERA_COUNT] = {
             { 0, 0, 0, 7.0f, 8, FROM_ANYWHERE, LOOK_STATION }, { 0, 0, 0, 7.0f, 8, FROM_ANYWHERE, LOOK_STATION },
             { 0, 0, 0, 7.0f, 8, FROM_ANYWHERE, LOOK_STATION } } },
         { "SHOOT THE DOME ON TOP OF IT", "DOME", "SHIELD DOWN", 1, {
-            { 0, 12.0f, 0, 6.5f, 24, FROM_ANYWHERE, LOOK_CORE } } },
+            { 0, 10.0f, 0, 9.5f, 24, FROM_ANYWHERE, LOOK_CORE } } },
         { "SHOOT OFF ITS ARMS", "ARMS", "TRANSFORMATION", 2, {
             { 12.2f, 1.0f, 6.0f, 6.0f, 14, FROM_ANYWHERE, LOOK_ARM }, { -12.2f, 0, 8.0f, 6.5f, 16, FROM_ANYWHERE, LOOK_ARM } } },
         { "NOW ITS HEAD", "HEAD", "ARMS DESTROYED", 1, {
@@ -112,6 +113,17 @@ const struct boss bosses[ERA_COUNT] = {
 /* --- the stage, and what is left of it ------------------------------------------ */
 
 const struct boss_stage *boss_stage(void) { return &bosses[G.era].stage[G.boss_stage]; }
+
+/* How big it is drawn and hit. The robot stands far bigger than the saucer
+ * it comes from; it grows as it becomes it. */
+float boss_size(const obj *o)
+{
+    float size = bosses[G.era].size;
+    if (G.era != 4) return size;
+    if (o->model == MODEL_ROBOT) return ROBOT_SIZE;
+    if (G.state == BOSSTURN && G.boss_stage == 2) return size + (ROBOT_SIZE - size) * smooth(G.boss_morph);
+    return size;
+}
 
 /* Where part `i` of the stage is in the world. */
 vp_vec3 boss_part_at(const obj *o, int i)
@@ -134,9 +146,15 @@ vp_vec3 robot_point(int limb, vp_vec3 p)
 {
     float py, a, dy, dz, c, n;
     if (limb == LIMB_ARM_R || limb == LIMB_ARM_L) {
+        /* raised about its shoulder, then swung to the side about it */
         int side = limb - LIMB_ARM_R;
+        float px = side ? -12.0f : 12.0f, ny, nz, dx = p.x - px, cy = cosf(G.arm_yaw[side]), sy = sinf(G.arm_yaw[side]);
         py = 14.0f;
-        a = G.arm_pitch[side] + G.arm_spin[side];
+        a = G.arm_pitch[side] + G.arm_spin[side] + G.arm_kick[side];
+        dy = p.y - py; dz = p.z;
+        c = cosf(a); n = sinf(a);
+        ny = dy * c + dz * n; nz = -dy * n + dz * c;
+        return vp_v3(px + dx * cy + nz * sy, py + ny, -dx * sy + nz * cy);
     } else if (limb == LIMB_LEG_R || limb == LIMB_LEG_L) {
         py = -6.0f;
         a = 0.42f * sinf(G.walk) * (limb == LIMB_LEG_R ? 1.0f : -1.0f);
@@ -163,13 +181,13 @@ static void arm_off(const obj *o, int side)
     G.arm_vel[side] = vp_v3_add(vp_v3_scale(o->vel, 0.5f), vp_v3_add(vp_v3_scale(right, side ? -16.0f : 16.0f), vp_v3(0, 6.0f, 0)));
 }
 
-/* The limbs, each step: the arms that are on it follow the plane up and
- * down, slowly; one that is off falls, tumbling, and blows up when it
+/* The limbs, each step: the arms that are on it follow the plane, up and
+ * down and to the side, never quite still; one that is off falls, tumbling, and blows up when it
  * reaches the ground or after a second and a half; the legs walk as far
  * as the robot goes. */
 static void robot_limbs(obj *o)
 {
-    const float size = bosses[G.era].size;
+    const float size = boss_size(o);
     const float *g;
     int n = model_segments(MODEL_ROBOT, &g), side, i;
     vp_xf place = flyer_place(o);
@@ -178,9 +196,16 @@ static void robot_limbs(obj *o)
     for (side = 0; side < 2; side++) {
         vp_vec3 shoulder = vp_xf_point(&place, vp_v3(side ? -12.0f : 12.0f, 14.0f, 0));
         if (G.arm_state[side] == 0) {
+            /* (its forearm is held 0.75 below the level: so far more, for it to point at the plane) */
             vp_vec3 to = vp_v3_sub(G.p.pos, shoulder);
-            float want = G.state == PLAYING && G.boss_stage == 2 ? clampf(atan2f(to.y, sqrtf(to.x * to.x + to.z * to.z)), -0.9f, 1.2f) : 0;
-            G.arm_pitch[side] += (want - G.arm_pitch[side]) * 0.06f;
+            float hc = cosf(o->heading), hs = sinf(o->heading), lx = to.x * hc - to.z * hs, lz = to.x * hs + to.z * hc;
+            int aiming = G.state == PLAYING && G.boss_stage == 2;
+            float sway = aiming ? 0.07f * sinf(o->age * 2.6f + 1.7f * (float)side) : 0;
+            float want = aiming ? clampf(atan2f(to.y, sqrtf(lx * lx + lz * lz)) + 0.75f, -0.5f, 2.3f) + sway : 0;
+            float yaw = aiming ? clampf(atan2f(lx, lz), -1.2f, 1.2f) + sway : 0;
+            G.arm_pitch[side] += (want - G.arm_pitch[side]) * 0.1f;
+            G.arm_yaw[side] += (yaw - G.arm_yaw[side]) * 0.1f;
+            G.arm_kick[side] *= 0.85f;
         } else if (G.arm_state[side] == 1) {
             vp_vec3 at;
             G.arm_vel[side].y -= 45.0f * DT;
@@ -249,7 +274,9 @@ static void stage_begin(obj *o, int k)
     s = boss_stage();
     G.boss_total = 0;
     for (i = 0; i < BOSS_PARTS; i++) {
-        G.part_hp[i] = i < s->parts ? s->part[i].hp + (s->part[i].hp * G.loop) / 3 + (G.difficulty - DIFFICULTY_NORMAL) : 0;
+        /* a fifth more than its table says (2026-11-02: they went down too easily), a third more each round */
+        int hp = (s->part[i < s->parts ? i : 0].hp * 6 + 4) / 5;
+        G.part_hp[i] = i < s->parts ? hp + (hp * G.loop) / 3 + (G.difficulty - DIFFICULTY_NORMAL) : 0;
         if (i < s->parts && G.part_hp[i] < 2) G.part_hp[i] = 2;
         if (i < s->parts && G.cheat_weak) G.part_hp[i] = 1;
         G.part_flash[i] = 0;
@@ -260,7 +287,7 @@ static void stage_begin(obj *o, int k)
         /* the robot's arms: both on it when it has just become the robot;
          * off for good after that (one that is still falling falls on) */
         for (i = 0; i < 2; i++) {
-            if (k <= 2) { G.arm_state[i] = 0; G.arm_pitch[i] = G.arm_spin[i] = 0; }
+            if (k <= 2) { G.arm_state[i] = 0; G.arm_pitch[i] = G.arm_spin[i] = G.arm_yaw[i] = G.arm_kick[i] = 0; }
             else if (G.arm_state[i] == 0) G.arm_state[i] = 2;
         }
         if (k <= 2) { G.walk = 0; G.robot_landed = 0; }
@@ -275,12 +302,25 @@ static void stage_begin(obj *o, int k)
         for (i = 0; i < 4; i++) spawn_escort(o, i);
         G.boss_total = 4;
     }
+    for (i = 0; i < STATION_GUNS; i++) G.sgun_hp[i] = 0;
     for (i = 0; i < s->parts; i++) {
         if (s->part[i].look == LOOK_STATION) {          /* round the place it hangs over, on the ground or on a roof */
             float a = PI2 * (float)i / (float)s->parts + 0.6f;
             vp_vec3 at = vp_v3(o->pos.x + sinf(a) * 250.0f, 0, o->pos.z + cosf(a) * 250.0f);
+            int side;
             at.y = city_top(G.era, at.x, at.z, 12.0f) + STATION_HEIGHT;
             G.station[i] = at;
+            /* its two guns, to the left and right of it as it is come at from outside */
+            for (side = 0; side < 2 && i * 2 + side < STATION_GUNS; side++) {
+                int g = i * 2 + side;
+                float b = a + (side ? 0.3f : -0.3f);
+                vp_vec3 gun = vp_v3(o->pos.x + sinf(b) * 290.0f, 0, o->pos.z + cosf(b) * 290.0f);
+                gun.y = city_top(G.era, gun.x, gun.z, 8.0f) + 3.0f;
+                G.sgun[g] = gun;
+                G.sgun_hp[g] = (G.cheat_weak ? 1 : STATION_GUN_HP + G.loop);
+                G.sgun_flash[g] = 0;
+                G.sgun_t[g] = 1.0f + 0.35f * (float)g;
+            }
         }
     }
 }
@@ -441,6 +481,8 @@ static void boss_turning(obj *o, float t)
         float r = model_radius(MODEL_MOTHERSHIP) * bosses[G.era].size;
         G.boss_morph = clampf((t - MORPH_FROM) / MORPH_TIME, 0, 1);
         o->pitch = o->roll = 0;
+        /* it comes down as it changes: the robot stands on the ground, ready, the moment it is one */
+        o->pos.y = G.boss_anchor.y + (GROUND_Y + 28.0f * ROBOT_SIZE - G.boss_anchor.y) * smooth(G.boss_morph);
         if (t < MORPH_FROM) {
             if (G.frames % 3 == 0)
                 burst(vp_v3_add(o->pos, vp_v3((frand() - 0.5f) * r * 1.6f, (frand() - 0.5f) * 10.0f, (frand() - 0.5f) * r * 1.6f)),
@@ -461,6 +503,9 @@ static void boss_turning(obj *o, float t)
             G.p.shake = 0.6f;
             o->model = MODEL_ROBOT;
             o->flash = 30;
+            G.robot_landed = 1;
+            shock_ring(vp_v3(o->pos.x, GROUND_Y + 1.0f, o->pos.z), 160.0f, 0.9f, 1);
+            burst(vp_v3(o->pos.x, GROUND_Y + 2.0f, o->pos.z), vp_v3(0, 0, 0), 16, 60.0f, 1.2f, SPARK_SMOKE, 1);
         }
     }
 }
@@ -516,9 +561,8 @@ static int from_its_side(const obj *o, int i, vp_vec3 dir)
  * is spent. */
 int boss_take_shot(obj *o, vp_vec3 from, vp_vec3 to)
 {
-    const struct boss *b = &bosses[G.era];
     const struct boss_stage *s = boss_stage();
-    float r = model_radius(o->model) * b->size, hull;
+    float size = boss_size(o), r = model_radius(o->model) * size, hull;
     vp_vec3 dir = vp_v3_normalize(vp_v3_sub(to, from));
     int i, shield = s->parts > 0 && s->part[0].look == LOOK_STATION;
 
@@ -527,11 +571,30 @@ int boss_take_shot(obj *o, vp_vec3 from, vp_vec3 to)
         boss_hit(o, to);
         return 1;
     }
+    /* the guns round the stations: they stand in the way of whoever goes for those */
+    if (shield) {
+        for (i = 0; i < STATION_GUNS; i++) {
+            if (G.sgun_hp[i] <= 0 || segment_distance(from, to, G.sgun[i]) > 11.0f) continue;
+            G.sgun_flash[i] = 8;
+            sound_at(FX_HIT_BOSS, G.sgun[i]);
+            burst(G.sgun[i], vp_v3(0, 0, 0), 4, 30.0f, 0.4f, SPARK_FIRE, 0);
+            if (--G.sgun_hp[i] <= 0) {
+                int points = GUN_POINTS * (1 + G.loop);
+                burst(G.sgun[i], vp_v3(0, 0, 0), 16, 60.0f, 1.2f, SPARK_FIRE, 1);
+                burst(G.sgun[i], vp_v3(0, 0, 0), 6, 20.0f, 2.0f, SPARK_SMOKE, 1);
+                shock_ring(G.sgun[i], 70.0f, 0.8f, 1);
+                sound_at(FX_EXPLODE, G.sgun[i]);
+                add_score(points);
+                floating_score(vp_v3_add(G.sgun[i], vp_v3(0, 12.0f, 0)), points);
+            }
+            return 1;
+        }
+    }
     for (i = 0; i < s->parts; i++) {
         vp_vec3 g;
         if (G.part_hp[i] <= 0) continue;
         g = boss_part_at(o, i);
-        if (segment_distance(from, to, g) < s->part[i].r * b->size + 3.5f && from_its_side(o, i, dir)) { part_hit(o, i, g); return 1; }
+        if (segment_distance(from, to, g) < s->part[i].r * size + 3.5f && from_its_side(o, i, dir)) { part_hit(o, i, g); return 1; }
     }
     /* the armour is its body, not the ball round all of it: a shot must
      * get to a part out on a wing; the shield is the ball, and more */
@@ -569,8 +632,9 @@ void boss_take_blast(obj *o, vp_vec3 at, int hits)
 int boss_touches(const obj *o, vp_vec3 p, float reach)
 {
     const struct boss *b = &bosses[G.era];
-    vp_vec3 rel = vp_v3_scale(vp_v3_sub(p, o->pos), 1.0f / b->size);
-    float r = reach / b->size, c = cosf(o->heading), n = sinf(o->heading);
+    float size = boss_size(o);
+    vp_vec3 rel = vp_v3_scale(vp_v3_sub(p, o->pos), 1.0f / size);
+    float r = reach / size, c = cosf(o->heading), n = sinf(o->heading);
     float lx = rel.x * c - rel.z * n, lz = rel.x * n + rel.z * c, ly = rel.y, k;
 
     if (o->model == MODEL_ROBOT) {
@@ -615,6 +679,15 @@ vp_vec3 boss_aim_point(const obj *o)
         d = vp_v3_length(to);
         dot = d > 1.0f ? vp_v3_dot(fwd, to) / d : 1.0f;
         if (dot > best_dot) { best_dot = dot; best = g; }
+    }
+    for (i = 0; i < STATION_GUNS; i++) {
+        vp_vec3 to;
+        float d, dot;
+        if (G.sgun_hp[i] <= 0) continue;
+        to = vp_v3_sub(G.sgun[i], G.p.pos);
+        d = vp_v3_length(to);
+        dot = d > 1.0f ? vp_v3_dot(fwd, to) / d : 1.0f;
+        if (dot > best_dot) { best_dot = dot; best = G.sgun[i]; }
     }
     return best;
 }
@@ -1006,8 +1079,16 @@ static void mothership(obj *o, float d, int armed, struct fly *f)
     const struct era *e = era();
     if (G.boss_stage == 0) {
         /* over its place, behind the shield: fire down at whoever goes for the stations */
+        int g;
         f->target = vp_v3(G.boss_anchor.x + 40.0f * sinf(o->age * 0.3f), 330.0f, G.boss_anchor.z + 40.0f * cosf(o->age * 0.3f));
         f->speed *= 0.5f;
+        /* the stations' guns know no quiet of the saucer's: flak whenever the plane is in reach */
+        for (g = 0; g < STATION_GUNS; g++) {
+            if (G.sgun_flash[g] > 0) G.sgun_flash[g]--;
+            if (G.sgun_hp[g] <= 0 || !player_targetable() || (G.sgun_t[g] -= DT) > 0) continue;
+            if (dist3(G.sgun[g], G.p.pos) < 560.0f) gun_flak(vp_v3_add(G.sgun[g], vp_v3(0, 3.0f, 0)));
+            G.sgun_t[g] = 1.7f / hard()->fire;
+        }
         if (!armed) return;
         machine_gun(local(o, 0, -6.0f, 0), 8, 2.0f);
         volley_goes_on(o->pos, e->bullet_speed);
@@ -1019,8 +1100,10 @@ static void mothership(obj *o, float d, int armed, struct fly *f)
         /* Its shield gone, it comes for the player itself: round the
          * plane in a tight ring, fast, rising and sinking; two rings and
          * a pinwheel in turn, its gun between them. The dome on top of
-         * it is what it can be hurt at. */
-        f->target = orbit(o, 300.0f, 70.0f * sinf(o->age * 0.7f), 0.3f);
+         * it is what it can be hurt at: so it stays below the plane, with
+         * its top in view (2026-11-02: from under it, hardly to be hit). */
+        f->target = orbit(o, 300.0f, 35.0f * sinf(o->age * 0.7f), 0.3f);
+        f->target.y -= 120.0f;
         f->speed *= 1.35f;
         f->turn = 0.8f;
         if (!armed) return;
@@ -1034,10 +1117,11 @@ static void mothership(obj *o, float d, int armed, struct fly *f)
         /* The robot. It has come down and walks at the plane, slowly, on
          * the ground, turning as slowly; whoever stays close is trodden
          * towards, whoever runs is followed. */
-        const float feet = 28.0f * bosses[G.era].size;
+        const float feet = 28.0f * ROBOT_SIZE;
+        int rounds = G.boss_n[0];
         f->target = vp_v3(G.p.pos.x, GROUND_Y + feet, G.p.pos.z);
-        f->turn = 0.45f;
-        f->speed = d > 150.0f ? 13.0f : 0.0f;
+        f->turn = 0.8f;
+        f->speed = d > 220.0f ? 26.0f : 0.0f;
         s_laser_damage = DMG_HEAD_LASER;
         if (!armed) { G.laser_state = 0; return; }
         if (G.boss_stage == 2) {
@@ -1045,7 +1129,10 @@ static void mothership(obj *o, float d, int armed, struct fly *f)
              * one in bursts, the big one in the left a single heavy ball
              * now and then, announced at its mouth. Out of its head, once
              * in a long while, the laser - the worst it has. */
-            if (G.part_hp[0] > 0) machine_gun(robot_world(o, LIMB_ARM_R, 12.2f, 1.0f, 14.0f), 8, 2.4f);
+            if (G.part_hp[0] > 0) {
+                machine_gun(robot_world(o, LIMB_ARM_R, 12.2f, 1.0f, 14.0f), 12, 1.5f);
+                if (G.boss_n[0] < rounds) G.arm_kick[0] = 0.12f;        /* every round throws the arm back a little */
+            }
             if (G.part_hp[1] > 0) {
                 vp_vec3 at = robot_world(o, LIMB_ARM_L, -12.3f, -4.0f, 20.5f);
                 if (G.boss_n[2] && G.boss_t[2] > 0) { G.warn_at = at; G.warn_t = G.boss_t[2]; }
@@ -1056,19 +1143,21 @@ static void mothership(obj *o, float d, int armed, struct fly *f)
                     } else {
                         boss_shoot(at, aim_ball(at), e->bullet_speed * 1.2f);
                         sound_at(FX_EXPLODE, at);
+                        G.arm_kick[1] = 0.5f;
                         G.boss_n[2] = 0;
-                        G.boss_t[2] = 3.4f / hard()->fire;
+                        G.boss_t[2] = 2.4f / hard()->fire;
                     }
                 }
             }
-            laser(local(o, 0, 20.0f, 3.5f), 11.0f);
+            laser(local(o, 0, 20.0f, 3.5f), 7.0f);
         } else {
-            /* Without arms: the laser far more often, and now and then two missiles out of the pack on its back. */
-            laser(local(o, 0, 20.0f, 3.5f), 4.5f);
+            /* Without arms: the laser far more often, a gun in its chest, and now and then two missiles out of the pack on its back. */
+            laser(local(o, 0, 20.0f, 3.5f), 3.5f);
+            machine_gun(local(o, 0, 10.0f, 9.0f), 10, 1.8f);
             if ((G.boss_t[2] -= DT) <= 0) {
                 boss_missile_from(local(o, 5.0f, 25.0f, -9.0f), o->heading, 0.6f);
                 boss_missile_from(local(o, -5.0f, 25.0f, -9.0f), o->heading, 0.6f);
-                G.boss_t[2] = 9.0f / hard()->fire;
+                G.boss_t[2] = 6.0f / hard()->fire;
             }
         }
     }
@@ -1105,7 +1194,7 @@ void update_boss(obj *o)
             { 9.0f, 4.5f },             /* the robot */
         };
         int which = o->model == MODEL_ROBOT ? ERA_COUNT : G.era;
-        float fire = rhythm[which][0] / hard()->fire, rest = rhythm[which][1];
+        float fire = rhythm[which][0], rest = rhythm[which][1] / hard()->fire;      /* the harder, the shorter the quiet */
         if (G.state == PLAYING && fmodf(G.boss_stage_time, fire + rest) >= fire) {
             armed = 0;
             if (G.frames % 4 == 0)

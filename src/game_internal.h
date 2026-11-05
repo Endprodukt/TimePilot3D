@@ -116,7 +116,8 @@ enum { SHOT_GUN, SHOT_FLAK, SHOT_BOSS, SHOT_HEAVY,
 #define SPAWN_AHEAD     0.6f        /* the share of enemies that come from ahead (spawn_enemy; 0.75 was a lot of them, 2026-10-22) */
 #define DESPAWN         1500.0f
 #define SPAWN_EVERY     0.5f
-#define BOSS_SPAWN_EVERY 3.0f      /* with a boss up, one lost is made good only slowly */
+#define BOSS_SPAWN_EVERY 1.5f      /* with a boss up, one lost is made good soon: it is not to be shot at in peace */
+#define ROUND_LONGER    5           /* enemies more to each boss with every round */
 #define CHUTE_CHANCE    5           /* one fallen enemy in this many leaves a parachutist */
 #define FORMATION_SIZE  5
 /* times, in seconds */
@@ -306,6 +307,9 @@ extern const struct heavy heavies[ERA_COUNT];
 #define BOSS_PART_POINTS 500        /* one of its parts shot off */
 #define BOSS_PARTS      6           /* the most a stage has */
 #define STATION_HEIGHT  26.0f       /* metres a shield station's dish is over what it stands on */
+#define STATION_GUNS    6           /* the guns round the stations: two to each */
+#define STATION_GUN_HP  4
+#define ROBOT_SIZE      3.0f        /* the robot, of its model's own; the saucer it comes from is smaller */
 
 /* The bosses (boss.c): each a fight in stages, each stage with parts to
  * shoot off. A part: where it sits (in the model's own units), how big it
@@ -453,6 +457,11 @@ struct game_state {
      * long. The legs: how far along its walk it is. */
     int   arm_state[2];
     float arm_pitch[2], arm_spin[2], arm_t[2];
+    float arm_yaw[2], arm_kick[2];      /* how far it is turned at the plane, and thrown back by its last shot */
+    /* The guns that guard the mothership's stations (boss.c, draw.c). */
+    vp_vec3 sgun[STATION_GUNS];
+    int   sgun_hp[STATION_GUNS], sgun_flash[STATION_GUNS];
+    float sgun_t[STATION_GUNS];
     vp_vec3 arm_off[2], arm_vel[2];
     float walk;
     int   robot_landed;
@@ -502,6 +511,9 @@ struct game_state {
     int   chase, hud_only;            /* the view now: from behind; else the display without the cockpit round it */
     int   view_ini;                   /* the view a game starts in (VIEW_)*/
     int   start_lives, difficulty, bonus_plane, kills_per_era;
+    int   settings_rev;              /* of the file read: older ones are brought up to date (load_settings) */
+    int   item_hint;                 /* this game has had an item, or been told of them: it is said once */
+    float hint_time;
     float yoke_sens;
     int   control_stick;              /* 0: flown with the yoke; 1: with a stick and buttons, whose switches are eased into a travel */
     float stick_x, stick_y;           /* that travel, -1..1 */
@@ -603,7 +615,11 @@ static inline float course_of(float heading, float pitch)
 
 static inline const struct era *era(void) { return &eras[G.era]; }
 
-static inline const struct difficulty *hard(void) { return &difficulties[G.difficulty]; }
+/* The difficulty as it is this round (game.c): it rises with every round. */
+const struct difficulty *hard(void);
+
+/* How many enemies to the boss this round: the setting, and longer each time round. */
+static inline int kills_needed(void) { return G.kills_per_era + ROUND_LONGER * G.loop; }
 
 /* --- objects -------------------------------------------------------------- */
 /* What is only for show (sparks, the lines of things burst, rings of
@@ -684,6 +700,8 @@ void boss_rocket(vp_vec3 from, vp_vec3 dir, float era_speed);
 void boss_ball(vp_vec3 at, vp_vec3 vel, float life);
 void boss_bomb(vp_vec3 at, vp_vec3 vel);
 void boss_missile_from(vp_vec3 from, float heading, float pitch);
+void gun_flak(vp_vec3 from);
+float boss_size(const obj *o);
 void boss_missile_if_allowed(obj *o);
 void spawn_escort(const obj *boss, int k);
 /* objects.c */

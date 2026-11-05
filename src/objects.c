@@ -276,7 +276,7 @@ float draw_scale(const obj *o)
 {
     if (o->kind == K_PART) return o->speed;             /* it carries its own */
     if (o->size > 0) return o->size;                    /* one of the big ones, or what is left of one */
-    if (o->kind == K_BOSS) return bosses[G.era].size;
+    if (o->kind == K_BOSS) return boss_size(o);
     if (o->kind == K_WRECK) return o->boss ? bosses[G.era].size : ENEMY_SCALE;
     return o->kind == K_ENEMY ? ENEMY_SCALE : o->kind == K_MISSILE ? MISSILE_SCALE : 1.0f;
 }

@@ -198,6 +198,7 @@ void grant_item(int item)
     default:            G.p.energy = ENERGY_FULL; break;
     }
     add_score(ITEM_POINTS);
+    G.item_hint = 1;                    /* it knows of them */
     cheer(item_names[item]);
     sound_fx(FX_BONUS);
     point_ring(G.p.pos, player_velocity(), 13, 60.0f, 0.6f);

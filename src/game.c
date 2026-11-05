@@ -69,7 +69,7 @@ const struct era eras[ERA_COUNT] = {
     /* speed and turn as the machines were: a biplane slow and nimble, a 1940 fighter
      * faster and wider, a jet fast with a turn as wide as a town, a helicopter
      * slow and round on the spot. The player's own turn is 1.25 at 85 m/s. */
-    { "1910", MODEL_BIPLANE,    MODEL_BLIMP,      B_PURSUIT,  56.0f, 1.15f, 135.0f, 320.0f, 1.5f, 8, 40, 0, 100, 3000, 30.0f, 0,
+    { "1910", MODEL_BIPLANE,    MODEL_BLIMP,      B_PURSUIT,  60.0f, 1.2f, 135.0f, 340.0f, 1.3f, 9, 40, 0, 100, 3000, 30.0f, 0,
       0.55f, 0.35f, 0.25f, { 255, 200, 60 } },
     { "1940", MODEL_MONOPLANE,  MODEL_BOMBER,     B_BOOMZOOM, 84.0f, 0.95f, 185.0f, 420.0f, 1.25f, 9, 48, 0, 150, 4000, 55.0f, 0,
       0.8f, 0.55f, 0.25f, { 120, 255, 120 } },
@@ -97,10 +97,25 @@ const struct heavy heavies[ERA_COUNT] = {
 const struct difficulty difficulties[DIFFICULTY_COUNT] = {
     /* the damage column is 8 percent down from what it was (2026-10-10: a touch too much) */
     { 0.78f, 0.90f, 1.00f, 0.9f, 0 },   /* easy: what normal was at first, a little more */
-    { 1.15f, 1.40f, 1.15f, 1.20f, 1 },  /* normal: harder again (2026-10-12: too easy, most of all at the start) */
-    { 1.24f, 1.65f, 1.25f, 1.4f, 2 },
-    { 1.47f, 2.00f, 1.35f, 1.6f, 3 },
+    { 1.25f, 1.60f, 1.20f, 1.30f, 1 },  /* normal: harder again (2026-11-02: can be raised all round) */
+    { 1.35f, 1.85f, 1.30f, 1.5f, 2 },
+    { 1.55f, 2.20f, 1.40f, 1.7f, 3 },
 };
+
+/* Every round through all the bosses is felt: what a hit costs, how often
+ * and how fast they shoot, how readily they break. Up to the seventh; after
+ * that the longer waves and the tougher parts go on rising alone. */
+const struct difficulty *hard(void)
+{
+    static struct difficulty now;
+    float round = (float)(G.loop > 6 ? 6 : G.loop);
+    now = difficulties[G.difficulty];
+    now.damage *= 1.0f + 0.12f * round;
+    now.fire *= 1.0f + 0.15f * round;
+    now.bullets *= 1.0f + 0.05f * round;
+    now.evade *= 1.0f + 0.08f * round;
+    return &now;
+}
 
 void enter(int state)
 {
@@ -186,8 +201,8 @@ static void set_level(int level)
     G.level = level;
     G.era = level % ERA_COUNT;
     G.loop = level / ERA_COUNT;
-    G.kills = G.cheat_kills > G.kills_per_era ? G.kills_per_era : G.cheat_kills;
-    if (G.debug_boss) { G.kills = G.kills_per_era; G.debug_boss = 0; }      /* DEBUG_LEVEL_SELECT: straight to this era's boss, once */
+    G.kills = G.cheat_kills > kills_needed() ? kills_needed() : G.cheat_kills;
+    if (G.debug_boss) { G.kills = kills_needed(); G.debug_boss = 0; }      /* DEBUG_LEVEL_SELECT: straight to this era's boss, once */
     G.boss_called = G.boss_alive = 0;
     G.spawn_timer = 1.0f;
     G.missile_rest = 8.0f;              /* the era's first missile not at once */
@@ -266,7 +281,7 @@ static void save_player(int level)
     G.pl[G.cur].level = level;
     /* into the same era as far as it had come; the boss, if it had been
      * called, comes again */
-    G.pl[G.cur].kills = level != G.level ? 0 : G.boss_called ? G.kills_per_era : G.kills;
+    G.pl[G.cur].kills = level != G.level ? 0 : G.boss_called ? kills_needed() : G.kills;
 }
 
 static void load_player(int who)
@@ -356,6 +371,8 @@ static void start_game(int players)
 {
     int i;
     G.players = players;
+    G.item_hint = 0;
+    G.hint_time = 0;
     for (i = 0; i < 2; i++) {
         G.pl[i].score = 0;
         G.pl[i].lives = G.start_lives - 1;  /* the one flying is not in the row of spares */
@@ -390,7 +407,7 @@ void start_warp(void)
     /* how long the era took, for run.log: to compare with the original's (about a minute and a half) */
     if (!G.selftest && !G.demo)
         fprintf(stderr, "Time Pilot 3D: era %s took %d:%02d - %d:%02d to its boss (%d kills), %d:%02d for the boss\n", era()->year,
-                (int)G.level_time / 60, (int)G.level_time % 60, (int)G.boss_at / 60, (int)G.boss_at % 60, G.kills_per_era,
+                (int)G.level_time / 60, (int)G.level_time % 60, (int)G.boss_at / 60, (int)G.boss_at % 60, kills_needed(),
                 (int)(G.level_time - G.boss_at) / 60, (int)(G.level_time - G.boss_at) % 60);
     G.warp_from = G.era;
     G.warp_to = (G.era + 1) % ERA_COUNT;
@@ -657,6 +674,7 @@ static void step(vp_input *in)
     G.level_time += DT;
     G.selftest_level_frames++;
     if (G.notice_time > 0) G.notice_time -= DT;
+    if (G.hint_time > 0) G.hint_time -= DT;
     G.cheer_time += DT;
     {
         int quiet = G.selftest || (!G.attract_sound && (G.state == ATTRACT || G.demo));
@@ -671,7 +689,7 @@ static void step(vp_input *in)
         else if (G.state == ATTRACT || G.demo) m = MUSIC_ATTRACT;
         else if (G.state == INITIALS) m = MUSIC_HISCORE;
         else if (G.state == LEVELIN) m = MUSIC_LEVELIN;
-        else if (G.state == BOSSINTRO) m = MUSIC_BOSS;
+        else if (G.state == BOSSINTRO || G.state == BOSSTURN) m = MUSIC_BOSS;
         else if (G.state == TUTORIAL) m = MUSIC_LOUNGE;
         else if (G.state == WARP) m = G.state_time < TUNNEL_APPROACH ? MUSIC_APPROACH : MUSIC_TUNNEL;
         sound_music(m);
@@ -766,8 +784,9 @@ static void step(vp_input *in)
     case BOSSTURN:
         /* Between two stages of the boss's fight: the same stillness,
          * shorter, while it brings out what it fights with next
-         * (boss.c, draw_bossintro). */
+         * (boss.c, draw_bossintro), and the same siren: it is not over. */
         update_objects();
+        if (G.state_time < 3.0f && fmodf(G.state_time, 0.55f) < DT) sound_fx(FX_WARN);
         G.p.pitch += -G.p.pitch * 0.05f;
         G.p.heading = wrap_angle(G.p.heading + 0.12f * DT);
         G.p.roll += (-0.15f - G.p.roll) * 0.05f;
@@ -896,6 +915,7 @@ static void read_settings(const char *path)
         else if (!strcmp(key, "lives"))          G.start_lives = atoi(value);
         else if (!strcmp(key, "bonus_plane"))    G.bonus_plane = atoi(value);
         else if (!strcmp(key, "enemies_per_era")) G.kills_per_era = atoi(value);
+        else if (!strcmp(key, "settings_rev"))   G.settings_rev = atoi(value);
         else if (!strcmp(key, "start_era"))      G.start_level = (int)clampf((float)atoi(value), 1, ERA_COUNT) - 1;
         else if (!strcmp(key, "volume"))         G.volume = (float)atof(value) / 100.0f;
         else if (!strcmp(key, "effects_volume")) G.effects_volume = (float)atof(value) / 100.0f;
@@ -951,7 +971,7 @@ static void load_settings(void)
     G.start_lives = 3;
     G.difficulty = DIFFICULTY_NORMAL;
     G.bonus_plane = 10000;
-    G.kills_per_era = 32;           /* the original's 56 made an era here last too long (2026-10-17): the 3D sky is slower to clear */
+    G.kills_per_era = 42;           /* the original's 56 made an era here last too long (2026-10-17): the 3D sky is slower to clear */
     G.volume = 0.6f;
     G.effects_volume = 0.8f;
     G.engine_volume = 0.4f;
@@ -965,6 +985,7 @@ static void load_settings(void)
     for (i = 0; i < 4; i++) G.yoke_layout[i] = i + 1;
     read_settings(vp_asset_path("game.ini", path, sizeof path));
     read_settings(settings_path(path, sizeof path));
+    if (G.settings_rev < 2 && G.kills_per_era == 32) G.kills_per_era = 42;      /* the old standard, saved with the rest: the waves are longer now (2026-11-02) */
     vpb_normalize(G.btn_fire, sizeof G.btn_fire);       /* advmame.rc names of an older file */
     vpb_normalize(G.btn_faster, sizeof G.btn_faster);
     vpb_normalize(G.btn_slower, sizeof G.btn_slower);
@@ -1074,6 +1095,7 @@ static int save_settings(void)
     fprintf(f, "lives = %d\n", G.start_lives);
     fprintf(f, "difficulty = %s\n", difficulty_key[G.difficulty]);
     fprintf(f, "bonus_plane = %d\n", G.bonus_plane);
+    fprintf(f, "settings_rev = 2\n");
     fprintf(f, "enemies_per_era = %d\n", G.kills_per_era);
     fprintf(f, "start_era = %d\n", G.start_level % ERA_COUNT + 1);
     fprintf(f, "free_play = %s\n", G.free_play ? "yes" : "no");

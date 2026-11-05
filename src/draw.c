@@ -221,7 +221,7 @@ static void draw_boss_parts(const obj *o, const vp_xf *place)
 static void draw_boss_parts_on(const obj *o, const vp_xf *place)
 {
     const struct boss_stage *st = boss_stage();
-    const float size = bosses[G.era].size, k = G.boss_deploy;
+    const float size = boss_size(o), k = G.boss_deploy;
     int i, j;
 
 #define P(x, y, z) vp_xf_point(place, vp_v3((x), (y), (z)))
@@ -469,6 +469,26 @@ static void draw_boss_parts_on(const obj *o, const vp_xf *place)
                 world_rgb(80, 220, 255);
                 world_line(dish, o->pos);
             }
+        }
+        /* the guns that guard them: a low mount, two barrels on the plane, as the city's guns */
+        world_level(G.bright[BRIGHT_ENEMIES]);
+        for (i = 0; i < STATION_GUNS; i++) {
+            vp_vec3 at = G.sgun[i], to;
+            float d;
+            if (G.sgun_hp[i] <= 0) continue;
+            to = vp_v3_sub(G.p.pos, at);
+            d = vp_v3_length(to);
+            if (d < 1.0f) continue;
+            if (to.y < 0.2f * d) to.y = 0.2f * d;                    /* it cannot point into the ground */
+            to = vp_v3_scale(vp_v3_normalize(to), 16.0f);
+            if (G.sgun_flash[i] > 0) world_rgb(255, 255, 255); else world_rgb(255, 60, 60);
+            for (j = 0; j < 4; j++) {
+                float a0 = PI2 * (float)j / 4.0f + 0.78f, a1 = a0 + PI2 / 4.0f;
+                world_line(vp_v3(at.x + 7.0f * cosf(a0), at.y - 3.0f, at.z + 7.0f * sinf(a0)), vp_v3(at.x + 7.0f * cosf(a1), at.y - 3.0f, at.z + 7.0f * sinf(a1)));
+                world_line(vp_v3(at.x + 7.0f * cosf(a0), at.y - 3.0f, at.z + 7.0f * sinf(a0)), at);
+            }
+            world_line(at, vp_v3_add(at, to));
+            world_line(vp_v3_add(at, vp_v3(1.8f, 0, 0)), vp_v3_add(vp_v3_add(at, to), vp_v3(1.8f, 0, 0)));
         }
     }
     if (G.laser_state && G.state == PLAYING) {
@@ -1300,7 +1320,7 @@ static void draw_kill_marks(int marks, int left)
 static void draw_hud(void)
 {
     char buf[48];
-    int i, marks, hp, left = G.kills_per_era - G.kills, per_mark = (G.kills_per_era + KILL_MARKS - 1) / KILL_MARKS;
+    int i, marks, hp, left = kills_needed() - G.kills, per_mark = (kills_needed() + KILL_MARKS - 1) / KILL_MARKS;
 
     if (G.players == 2 && !G.demo) {
         /* whose turn it is, with its score; the other's small under it */
@@ -1358,6 +1378,10 @@ static void draw_hud(void)
     if (G.state == GAME_OVER) text("GAME OVER", CX, 2600, 300, VP_TEXT_CENTER, 255, 80, 80);
     if (G.demo) text("DEMO", CX, 3620, 110, VP_TEXT_CENTER, 255, 255, 255);
     else if (G.notice_time > 0 && G.notice) text(G.notice, CX, 3500, 110, VP_TEXT_CENTER, 255, 255, 255);
+    if (G.hint_time > 0 && !G.demo && ((G.frames / 20) & 3)) {
+        text("ITEMS HELP YOU", CX, 3050, 150, VP_TEXT_CENTER, 80, 255, 255);
+        text("FLY THROUGH GATES, SHOOT DEPOTS", CX, 2880, 100, VP_TEXT_CENTER, 80, 255, 255);
+    }
 }
 
 /* What cheer() said: out of the middle, growing, through the colours. */
@@ -1557,7 +1581,7 @@ static void draw_bossintro(void)
             /* the robot stands far taller than the saucer is: further back, so that all of it is in the picture,
              * and by the saucer's size all through, so that the camera does not jump when it has become the robot */
             r = model_radius(MODEL_MOTHERSHIP) * b->size;
-            away = r * 4.3f;
+            away = r * 7.0f;
         } else
         away = r * 2.6f;
         eye = vp_v3_add(o->pos, vp_v3(sinf(ang) * away, -r * 0.35f + r * 0.5f * smooth(t / boss_turn_time()), cosf(ang) * away));
@@ -1797,6 +1821,14 @@ static void draw_levelin(void)
             text(buf, CX, 640, 100, VP_TEXT_CENTER, 255, 255, 255);
         }
     }
+    if (G.era == 0 && G.loop > 0 && t > 0.3f) {
+        /* round again: why it is the past once more */
+        snprintf(buf, sizeof buf, "ROUND %d", G.loop + 1);
+        text(buf, CX, 3400, 170, VP_TEXT_CENTER, 255, 255, 0);
+        text("THE MOTHERSHIP'S FALL TORE TIME OPEN", CX, 3200, 90, VP_TEXT_CENTER, 255, 255, 255);
+        text("IT THROWS YOU BACK TO 1910", CX, 3060, 90, VP_TEXT_CENTER, 255, 255, 255);
+        text("THE ENEMY FOLLOWS - STRONGER", CX, 2920, 90, VP_TEXT_CENTER, 255, 120, 80);
+    }
     world_flush();
     vp_dvg_reset_clip(world_dvg());
     letterbox_lines(500.0f, 3600.0f);
@@ -1903,6 +1935,7 @@ static void draw_warp(void)
              (int)(a[0] + (b[0] - a[0]) * u), (int)(a[1] + (b[1] - a[1]) * u), (int)(a[2] + (b[2] - a[2]) * u));
     }
     if (tt < TUNNEL_IN + 2.2f && ((G.frames / 8) & 1)) text("FLY THROUGH THE GREEN RINGS", CX, 2900, 150, VP_TEXT_CENTER, 0, 255, 120);
+    else if (flown && tt >= TUNNEL_IN + 2.2f && tt < TUNNEL_IN + 6.2f && ((G.frames / 8) & 3)) text("FASTER - MORE POINTS", CX, 2900, 170, VP_TEXT_CENTER, 255, 220, 0);
     if (G.tun.lost) text("PLANE LOST", CX, 2100, 260, VP_TEXT_CENTER, 255, 60, 40);
     else if (flown && G.tun.off > 0.75f && ((G.frames / 6) & 1)) text("WALL", CX, 2700, 200, VP_TEXT_CENTER, 255, 60, 40);
 
@@ -1915,7 +1948,7 @@ static void draw_warp(void)
                  ? TUNNEL_SLOW + (1.0f - TUNNEL_SLOW) * G.tun.throttle / THROTTLE_MID
                  : 1.0f + (TUNNEL_FAST - 1.0f) * (G.tun.throttle - THROTTLE_MID) / (1.0f - THROTTLE_MID)) + 0.5f),
                  (int)(0.5f + G.tun.throttle), (int)((0.5f + G.tun.throttle) * 10.0f + 0.5f) % 10);
-        text(buf, 160, 3650, 80, VP_TEXT_LEFT, 255, 220, 0);
+        text(buf, 160, 3650, 100, VP_TEXT_LEFT, 255, 220, 0);
         if (G.tun.good > 0) {
             snprintf(buf, sizeof buf, "PERFECT %d", G.tun.good_points);
             text(buf, CX, HUD_ENERGY_Y + 130.0f, 100, VP_TEXT_CENTER, 0, 255, 120);
