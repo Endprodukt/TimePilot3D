@@ -156,6 +156,8 @@ int vp_run(const vp_game_desc *desc, int argc, char **argv)
     }
     if (vp_dvg_get_output(g.out) == VP_DVG_OUTPUT_BOARD && desc->frame_hz_board > 0)
         frameHz = desc->frame_hz_board;
+    if (vp_dvg_hardware(g.out) == VP_HW_BEAMFORGE && desc->frame_hz_beamforge > 0)
+        frameHz = desc->frame_hz_beamforge;
     // On the board, the cabinet's HDMI screen shows the game's marquee.
     if (vp_dvg_get_output(g.out) == VP_DVG_OUTPUT_BOARD)
         vp_marquee_auto();

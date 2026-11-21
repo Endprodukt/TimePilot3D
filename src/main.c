@@ -74,6 +74,7 @@ int main(int argc, char **argv)
     desc.draw           = draw;
     desc.update_hz      = 60;
     desc.frame_hz       = 60;
-    desc.frame_hz_board = 40;
+    desc.frame_hz_board = 40;           /* USB-DVG */
+    desc.frame_hz_beamforge = 50;       /* BeamForge: the SDK tells them apart */
     return vp_run(&desc, argc, argv);
 }

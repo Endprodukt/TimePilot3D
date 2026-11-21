@@ -9,6 +9,8 @@ H=pi@192.168.0.122
 D=/persistent/games/timepilot3d
 scp -q $K build/pi/timepilot3d $H:$D/timepilot3d.new || exit 1
 scp -q $K package/game.ini $H:$D/game.ini || exit 1
+# run.sh starts it below; a game installed from a .vpk has none (2026-11-21)
+scp -q $K package/run.sh $H:$D/run.sh || exit 1
 if ls package/sounds/*.wav > /dev/null 2>&1; then ssh $K $H "mkdir -p $D/sounds" && scp -q $K package/sounds/*.wav $H:$D/sounds/ || exit 1; fi
 if ls package/music/*.wav > /dev/null 2>&1; then ssh $K $H "mkdir -p $D/music" && scp -q $K package/music/*.wav $H:$D/music/ || exit 1; fi
 # The menu finds the game by its folder alone (its game.ini, as it finds

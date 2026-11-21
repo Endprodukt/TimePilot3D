@@ -33,6 +33,8 @@ int main(int argc, char **argv)
   frame (`vp_dvg_begin_frame` / `vp_dvg_end_frame` are done for you). On
   the board, `frame_hz_board` replaces it when set: a heavy game can give
   the board more time per frame (30 Hz) and still run at 40 in a window.
+  On a BeamForge (`vp_dvg_hardware`), `frame_hz_beamforge` replaces both
+  when set: it draws about 6.7 times as much, so it can take a faster rate.
   The game logic keeps its own `update_hz` either way;
 * stops on **`ui_cancel`** (the cabinet's exit, back to the menu), on a closed
   window, on Ctrl+C, or when the game calls `vp_game_quit`; then calls

@@ -64,6 +64,9 @@ typedef struct vp_game_desc {
     int frame_hz;               /* 0 = 40 */
     int frame_hz_board;         /* 0 = frame_hz: the rate on the board, when it
                                  * differs (a heavy frame needs more time) */
+    int frame_hz_beamforge;     /* 0 = frame_hz_board: the rate when the board
+                                 * is a BeamForge (it draws about 6.7 times
+                                 * as much as the USB-DVG) */
 } vp_game_desc;
 
 /* Run the game. Returns 0 on a normal exit, 1 if something failed (the
